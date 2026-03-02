@@ -1,0 +1,183 @@
+# =============================================================================
+# MASIS — Multi-Agent Supervised Intelligence System
+# Python package dependencies
+# =============================================================================
+#
+# Installation:
+#   pip install -r requirements.txt
+#
+# Python version: >= 3.11 recommended (TypedDict with total=False, match-case, etc.)
+#
+# Sections:
+#   Core Framework    — LangGraph, LangChain, Pydantic
+#   LLM Providers     — OpenAI API client
+#   Vector Store      — ChromaDB for document embeddings
+#   Retrieval         — BM25, cross-encoder reranker
+#   NLI & Embeddings  — BART-MNLI (Skeptic), sentence-transformers (repetition detection)
+#   Web Search        — Tavily client
+#   Persistence       — PostgreSQL checkpointer for LangGraph
+#   API Layer         — FastAPI + streaming
+#   Observability     — Langfuse, LangSmith
+#   Configuration     — python-dotenv, pydantic-settings
+#   Testing           — pytest, pytest-asyncio
+# =============================================================================
+
+
+# =============================================================================
+# Core Framework
+# =============================================================================
+# LangGraph: the 3-node execution graph engine (Supervisor -> Executor -> Validator)
+# Verified against langgraph/types.py: Send, Command, interrupt
+langgraph>=0.2.0,<1.0.0
+
+# LangChain: ChatOpenAI, with_structured_output, SystemMessage, HumanMessage
+langchain>=0.3.0,<1.0.0
+langchain-openai>=0.2.0,<1.0.0
+langchain-community>=0.3.0,<1.0.0
+
+# Pydantic v2: data models, Field(min_length=1) for citation enforcement
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+
+
+# =============================================================================
+# LLM Provider
+# =============================================================================
+# OpenAI Python SDK (used by langchain-openai under the hood, but also directly)
+openai>=1.40.0,<2.0.0
+
+
+# =============================================================================
+# Vector Store
+# =============================================================================
+# ChromaDB: persistent vector store for document embeddings (MF-RES-03)
+chromadb>=0.5.0,<1.0.0
+
+
+# =============================================================================
+# Retrieval — BM25 and Cross-Encoder Reranker
+# =============================================================================
+# BM25 sparse retrieval (MF-RES-03)
+rank-bm25>=0.2.2
+
+# Cross-encoder reranker: ms-marco-MiniLM-L-6-v2 (MF-RES-04)
+sentence-transformers>=3.0.0,<4.0.0
+
+# Hugging Face model utilities (cross-encoder and BART-MNLI live here)
+transformers>=4.40.0,<5.0.0
+torch>=2.2.0
+# CPU-only PyTorch is sufficient for NLI and reranking (no GPU needed for inference)
+# If running on GPU, replace with: torch>=2.2.0+cu121
+
+
+# =============================================================================
+# NLI Models (Skeptic and Validator)
+# =============================================================================
+# BART-MNLI for Skeptic Stage 1 NLI pre-filter (MF-SKE-02)
+# Loaded via transformers pipeline: pipeline("zero-shot-classification", ...)
+# No additional package required -- included in transformers above.
+
+# HHEM-2.1 faithfulness model for Validator (MF-VAL-01)
+# Loaded via: pipeline("text-classification", model="vectara/hallucination_evaluation_model")
+# No additional package required -- included in transformers above.
+
+
+# =============================================================================
+# Web Search
+# =============================================================================
+# Tavily: web search API used by the WebSearch agent (MF-SAFE-04)
+tavily-python>=0.3.0,<1.0.0
+
+
+# =============================================================================
+# Persistence — PostgreSQL Checkpointer
+# =============================================================================
+# LangGraph PostgresSaver for production HITL resume and fault tolerance (MF-MEM-08)
+langgraph-checkpoint-postgres>=2.0.0,<3.0.0
+
+# PostgreSQL async driver (used by AsyncPostgresSaver in FastAPI)
+asyncpg>=0.29.0,<1.0.0
+
+# psycopg2 for sync usage (scripts, tests)
+psycopg2-binary>=2.9.9,<3.0.0
+
+
+# =============================================================================
+# API Layer
+# =============================================================================
+# FastAPI for POST /query, POST /resume, GET /status, GET /trace, GET /stream
+fastapi>=0.115.0,<1.0.0
+streamlit>=1.40.0,<2.0.0
+
+# Uvicorn: ASGI server for FastAPI
+uvicorn[standard]>=0.30.0,<1.0.0
+
+# Server-Sent Events for GET /stream (MF-API-05)
+sse-starlette>=2.1.0,<3.0.0
+
+# Pydantic HTTP models (already included via pydantic above)
+
+
+# =============================================================================
+# Observability
+# =============================================================================
+# Langfuse: LLM call tracing with inputs/outputs, latency, cost (MF-API-06)
+langfuse>=2.50.0,<3.0.0
+
+# Prometheus metrics (MF-API-07)
+prometheus-client>=0.21.0,<1.0.0
+
+
+# =============================================================================
+# Configuration
+# =============================================================================
+# python-dotenv: load .env file at startup (ENG-02 / M3 / S1b)
+python-dotenv>=1.0.0,<2.0.0
+
+
+# =============================================================================
+# Data Processing
+# =============================================================================
+# NumPy: cosine similarity in text_utils.py, vector operations
+numpy>=1.26.0,<3.0.0
+
+# Tokenisation for BM25 and metadata extraction
+tiktoken>=0.7.0,<1.0.0
+
+# PDF document loading for ingestion pipeline (used by ENG-06 RAG pipeline)
+pypdf>=4.0.0,<5.0.0
+pdfplumber>=0.11.0,<1.0.0
+
+# Office document loading
+python-docx>=1.1.0,<2.0.0
+python-pptx>=1.0.0,<2.0.0
+
+# CSV data loading
+pandas>=2.2.0,<3.0.0
+
+
+# =============================================================================
+# Utilities
+# =============================================================================
+# UUID generation for query_id
+uuid6>=2024.1.12
+
+# Rich logging for structured output
+rich>=13.7.0,<14.0.0
+
+# Tenacity: retry logic for circuit breaker (MF-SAFE-02)
+tenacity>=8.2.0,<9.0.0
+
+# Structured logging
+structlog>=24.1.0,<25.0.0
+
+
+# =============================================================================
+# Testing
+# =============================================================================
+pytest>=8.2.0,<9.0.0
+pytest-asyncio>=0.23.0,<1.0.0
+pytest-cov>=5.0.0,<6.0.0
+
+# Hypothesis for property-based testing of models and reducers
+hypothesis>=6.100.0,<7.0.0

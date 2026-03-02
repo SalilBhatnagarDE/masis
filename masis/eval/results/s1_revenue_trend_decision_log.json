@@ -1,0 +1,66 @@
+{
+  "scenario": "s1_revenue_trend",
+  "query": "What is our current revenue trend and how does it compare to last year?",
+  "decision_log": [
+    {
+      "turn": 1,
+      "mode": "slow",
+      "action": "plan",
+      "task_ids": [
+        "T1",
+        "T2"
+      ],
+      "cost_usd": 0.019530000000000002,
+      "latency_ms": 4813.0,
+      "reason": "First-turn DAG planning"
+    },
+    {
+      "turn": 1,
+      "mode": "fast",
+      "action": "continue",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "next_tasks_dispatched"
+    },
+    {
+      "turn": 2,
+      "mode": "fast",
+      "action": "continue",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "next_tasks_dispatched"
+    },
+    {
+      "turn": 3,
+      "mode": "fast",
+      "action": "ready_for_validation",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "all_tasks_done"
+    },
+    {
+      "turn": 4,
+      "mode": "fast",
+      "action": "ready_for_validation",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "all_tasks_done"
+    },
+    {
+      "turn": 5,
+      "mode": "fast",
+      "action": "ready_for_validation",
+      "cost_usd": 0.0,
+      "latency_ms": 16.0,
+      "reason": "all_tasks_done"
+    },
+    {
+      "turn": 6,
+      "mode": "fast",
+      "action": "ready_for_validation",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "all_tasks_done"
+    }
+  ]
+}
