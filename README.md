@@ -1,6 +1,6 @@
 # MASIS — Multi-Agent Strategic Intelligence System
 
-A multi-agent RAG system that answers complex business questions by decomposing them into parallel research tasks, verifying the evidence, and producing a cited answer. Built on LangGraph with a Supervisor → Executor → Validator control flow.
+A multi-agent system that answers complex business research questions by decomposing them into parallel research tasks, verifying the evidence, and producing a cited answer. Built on LangGraph with a Supervisor → Executor → Validator control flow.
 
 ![High Level Design](masis/hdl.png)
 
@@ -8,9 +8,9 @@ A multi-agent RAG system that answers complex business questions by decomposing 
 
 ## What It Does
 
-You ask a business question. MASIS breaks it down, researches it, checks the facts, and writes a cited answer.
+You ask a deep business question. MASIS breaks it down, researches it, checks the facts, and writes a cited answer.
 
-The difference from a plain RAG chatbot is that a **Skeptic agent** actively tries to find contradictions and unsupported claims in the evidence before the answer is written. If the evidence doesn't hold up, the system retries with a better query rather than guessing.
+The Supervisor makes routing decisions from summaries, not 100,000 chars of raw evidence. This keeps its context window small and its decisions fast.Skeptic agent actively tries to find contradictions and unsupported claims in the evidence before the answer is written. If the evidence doesn't hold up, the system retries with a better query rather than guessing.
 
 **Example flow:**
 
@@ -99,6 +99,74 @@ For deeper technical detail, each area has its own doc:
 
 ---
 
+
+## Execution Flow (Sequence Diagram)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant SUP as Supervisor
+    participant EXE as Executor
+    participant VAL as Validator
+    participant STATE as MASISState
+
+    U->>SUP: Raw Query
+    Note over SUP: MODE 1: PLAN (gpt-4.1)
+    SUP->>STATE: Write: task_dag, stop_condition
+    SUP->>EXE: next_tasks = [T1, T2] (parallel)
+
+    par Parallel via Send()
+        EXE->>STATE: T1: Write evidence_board (via reducer)
+    and
+        EXE->>STATE: T2: Write evidence_board (via reducer)
+    end
+
+    EXE->>SUP: last_task_result (AgentOutput)
+    Note over SUP: MODE 2: FAST PATH ($0, <10ms)
+    SUP->>SUP: Check criteria: PASS
+    SUP->>EXE: next_tasks = [T3 skeptic]
+
+    EXE->>STATE: T3: Read evidence_board, Write critique_notes
+    EXE->>SUP: last_task_result
+
+    Note over SUP: MODE 2: FAST PATH
+    SUP->>EXE: next_tasks = [T4 synthesizer]
+
+    EXE->>STATE: T4: Read evidence + critique, Write synthesis_output
+    EXE->>SUP: last_task_result
+
+    Note over SUP: All done → ready_for_validation
+    SUP->>VAL: Route to Validator
+
+    VAL->>STATE: Read synthesis, evidence
+    VAL->>VAL: Score: faithfulness, citation, relevancy, completeness
+
+    alt All scores pass thresholds
+        VAL->>U: Final Answer + Audit Trail
+    else Any score below threshold
+        VAL->>SUP: revise (quality_scores in state)
+        Note over SUP: MODE 3: SLOW PATH (gpt-4.1)
+        SUP->>EXE: Retry failed dimension
+    end
+```
+
+---
+
+## Filtered State Views Per Agent
+
+Each agent sees only what it needs. The Supervisor never sees full evidence chunks.
+
+| Agent | Sees | Does NOT See |
+|---|---|---|
+| **Supervisor** | `original_query`, `task_dag` (statuses), `last_task_result.summary` (500 chars max), `token_budget`, `iteration_count` | Full `evidence_board`, `critique_notes`, `synthesis_output` |
+| **Researcher** | `task.query` (its own sub-question only) | Other researchers' evidence, `task_dag`, budget |
+| **Skeptic** | All `evidence_board` chunks (needs cross-doc analysis), `task_dag` | Budget, `iteration_count`, other agent summaries |
+| **Synthesizer** | `evidence_board` (U-shape ordered), `critique_notes`, `task_dag` | Budget, raw retrieval scores |
+| **Validator** | `synthesis_output`, `evidence_board`, `original_query`, `task_dag` | Budget, `decision_log` |
+
+The Supervisor makes routing decisions from summaries, not 100,000 chars of raw evidence. This keeps its context window small and its decisions fast.
+
+---
 
 ## Why These Models
 

@@ -4,56 +4,6 @@ MASIS is a **3-node LangGraph StateGraph** that orchestrates a dynamic task DAG 
 
 ---
 
-## System Diagram
-
-```mermaid
-flowchart TD
-
-    Q(["User Query"])
-
-    Q -->|"ambiguous → HITL\nout-of-scope → reject\nclear ↓"| SUP
-
-    subgraph SUP_BOX["🧠 SUPERVISOR"]
-        SUP["MODE 1  ·  plan_dag\ngpt-4.1 → structured TaskPlan\nDecomposes query into typed Task DAG\n──────────────────────────────\nMODE 2  ·  Fast Path  ( $0 · <10ms )\nChecks every turn: budget · iteration cap · loop detect\nReads per-task acceptance criteria\nIf criteria PASS → dispatch next tasks\nIf budget / cap hit → force_synthesize\n──────────────────────────────\nMODE 3  ·  Slow Path  ( gpt-4.1 · ~$0.015 )\nOnly fires when Fast Path cannot decide\nCan: retry · re-plan DAG · stop · escalate to human"]
-    end
-
-    SUP_BOX -->|"dispatch tasks as DAG"| EXE_BOX
-
-    subgraph EXE_BOX["⚙️ EXECUTOR"]
-
-        subgraph POOL["Agent Pool"]
-            direction LR
-            AG1["Researcher A\nSemantic RAG\nHyDE · CRAG · Self-RAG\nHybrid BM25 + vector"]
-            AG2["Researcher B\nWeb Search\nTavily live data"]
-            AG3["Skeptic\nNLI pre-filter\nAdversarial LLM judge"]
-            AG4["Synthesizer\nU-shape ordering\nPydantic citations"]
-        end
-
-        subgraph DAG_EX["Example DAG"]
-            direction LR
-            T1["Researcher A\ndocs"] & T2["Researcher B\nweb"] --> T3["Skeptic\ncross-check"] --> T4["Synthesizer\ncited answer"]
-        end
-
-    end
-
-    EXE_BOX -->|"task results + typed AgentOutput"| VAL_BOX
-
-    subgraph VAL_BOX["✅ VALIDATOR"]
-        VAL["Faithfulness · Citation Accuracy · Answer Relevancy · DAG Completeness\n─────────────────────────────────────────────────────\nAll pass → Final Answer          Any fail → back to Supervisor"]
-    end
-
-    VAL_BOX -->|"fail: revise loop"| SUP_BOX
-    VAL_BOX -->|"pass"| ANS(["Final Answer"])
-
-    EXE_BOX -.->|"per-task acceptance criteria"| SUP_BOX
-    SUP_BOX -.->|"retry failed task"| EXE_BOX
-    SUP_BOX -.->|"re-plan DAG"| EXE_BOX
-    SUP_BOX -.->|"budget cap: force stop"| VAL_BOX
-    SUP_BOX -.->|"escalate to human"| HITL(["Human Review"])
-```
-
----
-
 ## Why 3 Graph Nodes?
 
 The graph has exactly 3 nodes: **Supervisor**, **Executor**, **Validator**. The agents (Researcher, Skeptic, Synthesizer, Web Search) are Python functions called by the Executor — not separate LangGraph nodes.
@@ -175,6 +125,57 @@ T1, T2, and T3 run in parallel via LangGraph's `Send()`. T4 only starts after al
 | Two-tier Supervisor | Fast Path eliminates 60–70% of LLM calls, saves ~$0.10/query |
 | Agents as functions, not nodes | Adding a new agent type = one `if` branch |
 | Parallel execution via `Send()` | LangGraph dispatches independent tasks concurrently |
+
+---
+
+
+## System Diagram
+
+```mermaid
+flowchart TD
+
+    Q(["User Query"])
+
+    Q -->|"ambiguous → HITL\nout-of-scope → reject\nclear ↓"| SUP
+
+    subgraph SUP_BOX["🧠 SUPERVISOR"]
+        SUP["MODE 1  ·  plan_dag\ngpt-4.1 → structured TaskPlan\nDecomposes query into typed Task DAG\n──────────────────────────────\nMODE 2  ·  Fast Path  ( $0 · <10ms )\nChecks every turn: budget · iteration cap · loop detect\nReads per-task acceptance criteria\nIf criteria PASS → dispatch next tasks\nIf budget / cap hit → force_synthesize\n──────────────────────────────\nMODE 3  ·  Slow Path  ( gpt-4.1 · ~$0.015 )\nOnly fires when Fast Path cannot decide\nCan: retry · re-plan DAG · stop · escalate to human"]
+    end
+
+    SUP_BOX -->|"dispatch tasks as DAG"| EXE_BOX
+
+    subgraph EXE_BOX["⚙️ EXECUTOR"]
+
+        subgraph POOL["Agent Pool"]
+            direction LR
+            AG1["Researcher A\nSemantic RAG\nHyDE · CRAG · Self-RAG\nHybrid BM25 + vector"]
+            AG2["Researcher B\nWeb Search\nTavily live data"]
+            AG3["Skeptic\nNLI pre-filter\nAdversarial LLM judge"]
+            AG4["Synthesizer\nU-shape ordering\nPydantic citations"]
+        end
+
+        subgraph DAG_EX["Example DAG"]
+            direction LR
+            T1["Researcher A\ndocs"] & T2["Researcher B\nweb"] --> T3["Skeptic\ncross-check"] --> T4["Synthesizer\ncited answer"]
+        end
+
+    end
+
+    EXE_BOX -->|"task results + typed AgentOutput"| VAL_BOX
+
+    subgraph VAL_BOX["✅ VALIDATOR"]
+        VAL["Faithfulness · Citation Accuracy · Answer Relevancy · DAG Completeness\n─────────────────────────────────────────────────────\nAll pass → Final Answer          Any fail → back to Supervisor"]
+    end
+
+    VAL_BOX -->|"fail: revise loop"| SUP_BOX
+    VAL_BOX -->|"pass"| ANS(["Final Answer"])
+
+    EXE_BOX -.->|"per-task acceptance criteria"| SUP_BOX
+    SUP_BOX -.->|"retry failed task"| EXE_BOX
+    SUP_BOX -.->|"re-plan DAG"| EXE_BOX
+    SUP_BOX -.->|"budget cap: force stop"| VAL_BOX
+    SUP_BOX -.->|"escalate to human"| HITL(["Human Review"])
+```
 
 ---
 
