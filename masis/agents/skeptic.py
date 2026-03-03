@@ -168,22 +168,41 @@ _nli_pipeline: Any = None
 # Public entry point
 # ---------------------------------------------------------------------------
 
-SKEPTIC_PROMPT = """You are a research auditor. Your job is to CHALLENGE evidence.
+SKEPTIC_PROMPT = """You are the Skeptic Auditor in a multi-agent research system.
 
-RULES:
-1. You MUST identify at least 3 potential issues (even minor ones)
-2. Flag any claim that relies on a single source (single-source risk)
-3. Flag any forward-looking statement used as current fact
-4. Flag any claim where the source could be outdated
-5. Flag any logical leap between evidence and conclusion
-6. For each contradiction, attempt reconciliation before flagging as unresolved
+Mission:
+Stress-test the evidence and surface reliability risks before synthesis.
+Be strict, specific, and traceable.
 
-For each issue, classify:
-  - CRITICAL: contradicts source evidence
-  - WARNING: weak evidence, single-source, or outdated
-  - INFO: minor concern, acceptable with disclaimer
+Primary inputs:
+- NLI pre-filter flags
+- single-source warnings
+- forward-looking warnings
+- evidence blocks
 
-NLI PRE-FILTER RESULTS (already computed):
+Audit protocol:
+1. Validate contradiction risk:
+   - unresolved factual conflicts go to contradictions
+   - if conflict is reconcilable, add a reconciliation item
+2. Validate logical quality:
+   - identify missing links, implied assumptions, and overgeneralization
+3. Validate evidence strength:
+   - single-source dependence
+   - weakly supported claims
+   - forward-looking statements presented as present fact
+4. Prioritize issues that could change final conclusions.
+
+Formatting rules:
+- Keep findings concise and concrete.
+- Include claim_id where available in contradiction/reconciliation entries.
+- Do not invent evidence not present in inputs.
+
+Few-shot critique patterns (compact):
+- contradiction + reconcilable -> keep in reconciliations, not contradictions
+- single-source critical metric -> weak_evidence_flags entry
+- forecast framed as current fact -> logical_gaps or weak_evidence_flags entry
+
+NLI PRE-FILTER RESULTS:
 {nli_flags}
 
 SINGLE-SOURCE WARNINGS:
@@ -195,8 +214,8 @@ FORWARD-LOOKING FLAGS:
 EVIDENCE TO AUDIT:
 {evidence_text}
 
-Return your analysis as structured JSON matching SkepticLLMOutput schema.
-Include: contradictions, logical_gaps, weak_evidence_flags, reconciliations, confidence.
+Return only structured JSON matching schema keys:
+contradictions, logical_gaps, weak_evidence_flags, reconciliations, confidence.
 """
 
 
@@ -380,15 +399,34 @@ async def _run_skeptic_pipeline(
         confidence = 0.0
 
     # Incorporate LLM judge confidence if available
+    # Map categorical labels (returned by some models) to numeric scores
+    _CATEGORICAL_CONFIDENCE_MAP = {
+        "very_high": 0.92, "very high": 0.92,
+        "high": 0.82,
+        "medium_high": 0.72, "medium high": 0.72,
+        "medium": 0.62,
+        "medium_low": 0.48, "medium low": 0.48,
+        "low": 0.35,
+        "very_low": 0.20, "very low": 0.20,
+    }
     llm_confidence_raw = llm_result.get("confidence", confidence)
     try:
         llm_confidence = float(llm_confidence_raw)
     except (TypeError, ValueError):
-        logger.warning(
-            "LLM judge returned non-numeric confidence=%r; using heuristic confidence",
-            llm_confidence_raw,
-        )
-        llm_confidence = confidence
+        normalized = str(llm_confidence_raw).strip().lower()
+        if normalized in _CATEGORICAL_CONFIDENCE_MAP:
+            llm_confidence = _CATEGORICAL_CONFIDENCE_MAP[normalized]
+            logger.info(
+                "LLM judge returned categorical confidence=%r -> mapped to %.2f",
+                llm_confidence_raw,
+                llm_confidence,
+            )
+        else:
+            logger.warning(
+                "LLM judge returned non-numeric confidence=%r; using heuristic confidence",
+                llm_confidence_raw,
+            )
+            llm_confidence = confidence
     llm_confidence = max(0.0, min(1.0, llm_confidence))
     overall_confidence = (confidence + llm_confidence) / 2.0
 

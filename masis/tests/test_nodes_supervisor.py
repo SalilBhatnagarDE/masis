@@ -339,7 +339,7 @@ class TestSupervisorSlowPath:
         updated_dag: List[TaskNode] = result["task_dag"]
         t1_updated = next(t for t in updated_dag if t.task_id == "T1")
         assert t1_updated.status == "running"  # set to pending then picked up by get_next_ready_tasks → running
-        assert t1_updated.query == "Better Q3 revenue query"
+        assert t1_updated.query.startswith("Better Q3 revenue query")
 
     @pytest.mark.asyncio
     async def test_slow_path_modify_dag_adds_task(self):

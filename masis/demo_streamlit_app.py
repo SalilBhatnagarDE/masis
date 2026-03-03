@@ -25,7 +25,7 @@ from masis.graph.runner import stream_graph
 
 
 RESULTS_DIR = Path(__file__).parent / "eval" / "results"
-QUERY_TIMEOUT_SECONDS = int(os.getenv("QUERY_TIMEOUT_SECONDS", "180"))
+QUERY_TIMEOUT_SECONDS = int(os.getenv("QUERY_TIMEOUT_SECONDS", "300"))
 
 
 def _run_async(coro):
@@ -138,8 +138,8 @@ def _task_status_snapshot(task_dag: List[Any]) -> str:
 def _apply_model_profile(profile: str) -> None:
     """Switch runtime model routing for demo without editing .env."""
     if profile == "High Quality (demo)":
-        model_routing_cfg.MODEL_ROUTING["supervisor_plan"] = "gpt-4.1"
-        model_routing_cfg.MODEL_ROUTING["supervisor_slow"] = "gpt-4.1"
+        model_routing_cfg.MODEL_ROUTING["supervisor_plan"] = "gpt-5.2"
+        model_routing_cfg.MODEL_ROUTING["supervisor_slow"] = "gpt-5.2"
         model_routing_cfg.MODEL_ROUTING["researcher"] = "gpt-4.1"
         model_routing_cfg.MODEL_ROUTING["synthesizer"] = "gpt-4.1"
         model_routing_cfg.MODEL_ROUTING["skeptic_llm"] = "o3-mini"

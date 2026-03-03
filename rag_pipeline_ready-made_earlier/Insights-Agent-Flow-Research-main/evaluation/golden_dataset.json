@@ -1,0 +1,32 @@
+[
+    {
+        "question": "What is our current revenue trend?",
+        "ground_truth": "Revenue Trend Update Bottom Line: Revenue is steadily increasing, but growth has slowed since FY23. Key Findings Annual Revenue: Increased from 13.56 B ( 2021 ) ∗ ∗ t o ∗ ∗ 13.56B(2021)∗∗to∗∗19.28B (2025) [Doc 1, Doc 3]. YoY Growth: 2021–2022: +$2.75B 2022–2023: +$1.90B 2023–2024: +$0.35B (smallest increase) 2024–2025: +$0.72B Quarterly Revenue (Sep 30, 2025): $5,076M, up 3.7% YoY and 2.7% QoQ [Doc 4]. Quarter Ended Dec 31, 2024: Revenue grew 7.6% YoY in INR terms [Doc 5]. Sector YoY Growth (Dec 31, 2025): 3.2% reported, 1.7% constant currency [Doc 2].",
+        "reference_files": [
+            "infosys-q2-2026.pdf",
+            "infosys-revenue-chart.png",
+            "infosys-q3-2026.pdf",
+            "ifrs-inr-press-release (2).pdf"
+        ]
+    },
+    {
+        "question": "Which departments are underperforming in this year?",
+        "ground_truth": "Underperforming Departments – FY2025 Bottom Line: Sales & Support and support functions (Selling, Marketing, Administrative) are underperforming, as indicated by headcount declines and rising expenses. Key Findings Sales & Support headcount: Decreased from 17,426 (Mar 31, 2024) to 16,979 (Mar 31, 2025), despite overall company growth [Doc 1]. Sales & Support implication: Decline suggests underperformance or restructuring in this department [Doc 1]. Operating Margin: Dropped from 21.1% (Jun 30, 2024) to 18.4% (Dec 31, 2025), with a notable Q3 FY26 decline [Docs 4, 5]. Selling & Marketing Expenses: Increased 24.6% YoY (Dec 31, 2025 vs. Dec 31, 2024) [Doc 5]. Administrative Expenses: Increased 15.2% YoY (Dec 31, 2025 vs. Dec 31, 2024) [Doc 5]. Total Operating Expenses: Up 19.8% YoY (Dec 31, 2025 vs. Dec 31, 2024) [Doc 5]. Implication: Rising expenses and declining margins indicate underperformance in cost control and efficiency in support functions.",
+        "reference_files": [
+            "infosys-q1-2026.pdf",
+            "infosys-q3-2026.pdf",
+            "infosys-q1-2025.pdf",
+            "infosys-q4-2025.pdf"
+        ]
+    },
+    {
+        "question": "What were the key risks highlighted in the this year?",
+        "ground_truth": "Key Risks Highlighted in 2026 Bottom Line: The year’s primary risks include a major cybersecurity breach, talent and regulatory challenges, rapid tech disruption, ESG execution, and financial strategy pressures. Key Findings Cybersecurity Incident (McCamish): Major breach under review; risks include financial liabilities, litigation, and reputational damage. [Doc 2, Doc 3, Doc 4, Doc 5] Talent and Workforce: Increased competition, retention challenges, rising wage costs, and hybrid work complexities. [Doc 2, Doc 3, Doc 4, Doc 5] Regulatory/Geopolitical: Evolving regulations (notably US H-1B and 2025 US presidential proclamation), economic and geopolitical uncertainties. [Doc 2, Doc 3, Doc 4, Doc 5] Technological Disruption: Rapid change, especially in Generative AI, requires ongoing innovation to avoid obsolescence. [Doc 2, Doc 3, Doc 4, Doc 5] ESG/Sustainability: Challenges in executing ESG vision and maintaining compliance; reputational and capital access risks. [Doc 2, Doc 3, Doc 4, Doc 5] Financial/Strategic: Risks in capital allocation, acquisitions, margins, liquidity, and market position. [Doc 2, Doc 3, Doc 4, Doc 5]",
+        "reference_files": [
+            "ifrs-inr-press-release (2).pdf",
+            "ifrs-inr-press-release 0.pdf",
+            "ifrs-inr-press-release (5).pdf",
+            "ifrs-inr-press-release (3).pdf"
+        ]
+    }
+]

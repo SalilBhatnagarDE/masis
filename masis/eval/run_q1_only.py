@@ -76,7 +76,7 @@ def _safe_serialize(obj):
 
 
 async def run_q1():
-    from masis.eval.ingest_docs import setup_retrieval
+    from masis.eval.ingest_docs import DEFAULT_DOC_FOLDER, setup_retrieval
     from masis.graph.runner import ainvoke_graph
 
     # ── Ingestion (reuses existing ChromaDB if available) ─────────────────
@@ -84,10 +84,7 @@ async def run_q1():
     logger.info("Q1 Runner: setting up retrieval pipeline")
     logger.info("=" * 70)
 
-    doc_folder = (
-        r"C:\Users\salil\final_maiss\rag_pipeline_ready-made_by_engineer6"
-        r"\Insights-Agent-Flow-Research-main\infosys_company_docs"
-    )
+    doc_folder = DEFAULT_DOC_FOLDER
     setup_retrieval(doc_folder)
 
     # ── Run Q1 ────────────────────────────────────────────────────────────

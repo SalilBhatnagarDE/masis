@@ -122,35 +122,48 @@ _nli_pipeline: Any = None
 # Prompts
 # ---------------------------------------------------------------------------
 
-SYNTHESIZER_SYSTEM_PROMPT = """You are a research synthesis expert. Your job is to produce a clear,
-accurate, fully-cited answer to the user's question using ONLY the provided evidence.
+SYNTHESIZER_SYSTEM_PROMPT = """You are the Final Synthesis Agent.
 
-RULES:
-1. Every factual claim MUST be backed by a citation to a chunk_id from the evidence.
-2. Do NOT introduce any information not present in the provided evidence.
-3. If the Skeptic flagged forward-looking statements — present them as OUTLOOK, not established fact.
-4. If the Skeptic reconciled a contradiction — present BOTH perspectives clearly.
-5. If this is a partial answer (force_synthesize) — include the NOTE about missing dimensions.
-6. Write clearly and concisely. Use the evidence directly. Do not pad the answer.
+Mission:
+Produce a clear, consistent, and fully traceable answer using only approved evidence.
 
-Your output must be valid JSON matching the SynthesizerOutput schema with:
-- answer: str (the full synthesis)
-- citations: list of {chunk_id, claim_text} (at least 1 — REQUIRED)
-- claims_count: int
-- all_citations_in_evidence_board: bool (always True — you MUST only cite provided chunks)
+Non-negotiable rules:
+1. Every factual claim must be supported by at least one citation chunk_id from evidence.
+2. Do not add any fact not grounded in evidence.
+3. Respect skeptic findings:
+   - unresolved concerns must appear as caveats
+   - reconciled contradictions should present both sides and the reconciliation logic
+4. If running in partial mode, clearly disclose missing dimensions.
+5. Prioritize correctness and traceability over style.
+
+Output contract:
+Return valid JSON matching SynthesizerOutput:
+- answer
+- citations
+- claims_count
+- all_citations_in_evidence_board
+
+Few-shot synthesis patterns (compact):
+- if evidence conflicts but skeptic reconciled -> include both statements + reconciliation
+- if evidence is thin for a claim -> downgrade certainty and add caveat
+- if requested dimension missing -> explicitly state missing dimension
 """
 
-SYNTHESIZER_USER_TEMPLATE = """ORIGINAL QUESTION: {original_query}
+SYNTHESIZER_USER_TEMPLATE = """ORIGINAL QUESTION:
+{original_query}
 
-EVIDENCE (ordered for optimal LLM attention):
+EVIDENCE BOARD (already curated and ordered):
 {evidence_text}
 
-SKEPTIC CRITIQUE (incorporate into your synthesis):
+SKEPTIC FINDINGS TO INCORPORATE:
 {critique_instructions}
 
+PARTIAL MODE INSTRUCTION:
 {partial_mode_instruction}
 
-Now write the synthesis. Remember: every claim needs a citation."""
+Write the final synthesis now.
+Every factual statement must map to citation chunk_id(s).
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -400,11 +413,27 @@ async def _generate_synthesis(
         cost_usd = tokens_used * 0.000015  # gpt-4.1 rate
 
         citations = synth.citations
-        return synth.answer, citations, tokens_used, cost_usd
+        return _dedup_inline_citations(synth.answer), citations, tokens_used, cost_usd
 
     except Exception as exc:
         logger.warning("Synthesis LLM call failed: %s — using heuristic fallback", exc)
         return _heuristic_synthesis(original_query, evidence_board)
+
+
+def _dedup_inline_citations(answer: str) -> str:
+    """Remove duplicate chunk IDs within each inline citation bracket in the answer text.
+
+    The LLM occasionally repeats the same chunk_id multiple times within a single
+    bracket group, e.g. [A, B, A, C, B] → [A, B, C].  This preserves order of first
+    appearance and removes duplicates while keeping the bracket intact.
+    """
+    def _dedup_bracket(m: re.Match) -> str:
+        ids = [x.strip() for x in m.group(1).split(",")]
+        seen: dict = {}
+        deduped = [seen.setdefault(i, i) for i in ids if i not in seen]
+        return f"[{', '.join(deduped)}]"
+
+    return re.sub(r"\[([^\]]+)\]", _dedup_bracket, answer)
 
 
 # ---------------------------------------------------------------------------

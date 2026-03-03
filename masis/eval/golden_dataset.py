@@ -6,8 +6,8 @@ Golden dataset loader and structure for MASIS evaluation (MF-EVAL-01).
 Loads curated test queries with expected outputs from JSON, used by
 regression.py and scenario_tests.py.
 
-Source data: golden_dataset.json from engineer 6's evaluation folder,
-containing 3 real Infosys queries with ground truth answers.
+Source data: golden_dataset.json from the local evaluation folder,
+containing real Infosys queries with ground truth answers.
 """
 
 from __future__ import annotations
@@ -25,13 +25,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Path to the golden dataset JSON
 # ---------------------------------------------------------------------------
-GOLDEN_DATASET_PATH = str(
-    Path(__file__).resolve().parents[2]
-    / "rag_pipeline_ready-made_by_engineer6"
-    / "Insights-Agent-Flow-Research-main"
-    / "evaluation"
-    / "golden_dataset.json"
-)
+def _resolve_default_golden_dataset_path() -> str:
+    """Resolve the default golden dataset path from common local layouts."""
+    project_root = Path(__file__).resolve().parents[2]
+    candidates = [project_root / "evaluation" / "golden_dataset.json"]
+    candidates.extend(
+        project_root.glob("rag_pipeline*/Insights-Agent-Flow-Research-main/evaluation/golden_dataset.json")
+    )
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return str(project_root / "evaluation" / "golden_dataset.json")
+
+
+GOLDEN_DATASET_PATH = _resolve_default_golden_dataset_path()
 
 
 # ---------------------------------------------------------------------------

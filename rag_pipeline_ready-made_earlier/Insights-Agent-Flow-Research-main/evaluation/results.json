@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "timestamp": "2026-02-18T18:24:18.619154",
+    "company": "infosys",
+    "model": "gpt-4.1",
+    "embedding_model": "text-embedding-3-small",
+    "num_questions": 3
+  },
+  "overall_scores": {
+    "faithfulness": 0.9471,
+    "answer_relevancy": 0.7796,
+    "context_recall": 0.6417,
+    "context_precision": 0.7056
+  }
+}

@@ -129,12 +129,12 @@ SAFETY_LIMITS: Dict[str, Any] = {
 
 BUDGET_LIMITS: Dict[str, Any] = {
     # Hard caps per query session
-    "max_tokens": 100_000,                 # Total LLM tokens across all agents
+    "max_tokens": 200_000,                 # Total LLM tokens across all agents
     "max_cost_usd": 0.50,                  # Total cost ceiling in USD
     "max_wall_clock_seconds": 300,         # Same as SAFETY_LIMITS for convenience
 
     # Soft limits -- approaching these triggers force_synthesize warning
-    "soft_token_warning_threshold": 90_000,  # 90% of max_tokens
+    "soft_token_warning_threshold": 180_000,  # 90% of max_tokens
     "soft_cost_warning_threshold": 0.45,     # 90% of max_cost_usd
 
     # Context window management

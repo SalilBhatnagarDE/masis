@@ -1,0 +1,155 @@
+INFOSYS AGM MEETING NOTES
+=========================
+
+Date: July 2025
+Topic: Annual General Meeting Highlights
+
+--- Discussion Point 1 ---
+If such assets are considered to be impaired, the impairment to amount. The carrying amount of the asset is increased to its
+be recognized in the Statement of Profit and Loss is measured by revised recoverable amount, provided that this amount does not
+the amount by which the carrying value of the assets exceeds the exceed the carrying amount that would have been determined
+estimated recoverable amount of the asset. An impairment loss (net of any accumulated depreciation) had no impairment loss
+is reversed in the Statement of Profit and Loss if there has been been recognized for the asset in prior years.
+a change in the estimates used to determine the recoverable
+The changes in the carrying value of property, plant and equipment for the year ended March 31, 2025 are as follows:
+(In ₹ crore)
+Particulars Land – Buildings(1)(2) Plant and Office Computer Furniture Leasehold Vehicles Total
+Freehold machinery(2) equipment(2) equipment(2) and improvements
+fixtures(2)
+Gross carrying
+value as at April 1,
+2024 1,430 10,679 3,214 1,370 7,379 2,160 963 45 27,240
+Additions 47 32 45 97 1,013 47 68 2 1,351
+Deletions** – (90) (21) (44) (475) (81) (250) (1) (962)
+Gross carrying
+value as at March
+31, 2025 1,477 10,621 3,238 1,423 7,917 2,126 781 46 27,629
+Accumulated
+depreciation as at
+April 1, 2024 – (4,575) (2,732) (1,139) (5,497) (1,709) (733) (42) (16,427)
+Depreciation – (402) (176) (99) (1,034) (166) (125) (2) (2,004)
+Accumulated
+depreciation on
+deletions** – 13 20 43 469 79 247 1 872
+Accumulated
+depreciation as at
+March 31, 2025 – (4,964) (2,888) (1,195) (6,062) (1,796) (611) (43) (17,559)
+Carrying value as at
+April 1, 2024 1,430 6,104 482 231 1,882 451 230 3 10,813
+Carrying value as at
+March 31, 2025 1,477 5,657 350 228 1,855 330 170 3 10,070
+** During the year ended March 31, 2025, certain assets which were not in use having gross book value of ₹411 crore (net book value: Nil) were retired.
+Infosys Integrated Annual Report 2024-25 235
+
+--- Discussion Point 2 ---
+a. Gratuity and Pension
+The details of the defined benefit retirement plans and the amounts recognized in the Standalone financial statements as at March 31,
+2025 and March 31, 2024 are as follows:
+(In ₹ crore)
+Particulars Gratuity Pension
+As at March 31, As at March 31,
+2025 2024 2025 2024
+Change in benefit obligations
+Benefit obligations at the beginning 1,830 1,524 686 591
+Service cost 305 280 28 30
+Interest expense 122 104 11 11
+Past service cost – plan amendments – – – (28)
+Transfer 4 32 – –
+Remeasurements – Actuarial (gains) / losses 73 22 57 18
+Employee contribution – – 24 23
+Benefits paid (158) (132) (18) 29
+Translation difference 1 – 37 12
+Benefit obligations at the end 2,177 1,830 825 686
+Change in plan assets
+Fair value of plan assets at the beginning 1,817 1,516 650 537
+Interest income 132 110 11 10
+Transfer 4 3 – –
+Remeasurements- Return on plan assets excluding amounts
+included in interest income 20 15 48 11
+Employee contribution – – 24 23
+Employer contribution 590 303 28 29
+Benefits paid (155) (130) (18) 29
+Translation difference (1) – 32 11
+Fair value of plan assets at the end 2,407 1,817 775 650
+Funded status 230 (13) (50) (36)
+Defined benefit plan asset (Refer to Note 2.10) 257 9 – –
+Defined benefit plan liability (27) (22) (50) (36)
+The amount for the year ended March 31, 2025 and March 31, 2024 recognized in the Statement of Profit and Loss under employee
+benefit expense are as follows:
+(In ₹ crore)
+Particulars Gratuity Pension
+Year ended March 31, Year ended March 31,
+2025 2024 2025 2024
+Service cost 305 280 28 30
+Net interest on the net defined benefit liability / asset (10) (6) – 1
+Plan amendments – – – (28)
+Net cost 295 274 28 3
+Infosys Integrated Annual Report 2024-25 273
+
+--- Discussion Point 3 ---
+the Group in accordance with Ind AS 115, Revenue from Contract with
+Particulars Year ended March 31,
+Customers. As at March 31, 2025 and March 31, 2024, the financial liability
+2025 2024 pertaining to such arrangements amounts to ₹67 crore and ₹372 crore,
+respectively.
+Capital creditors(1) 520 310
+# Represents liability related to options issued by the Group over the non-
+Other payables(1)(4) 475 571 controlling interests in its subsidiaries
+Total current other financial Accrued expenses primarily relate to cost of technical
+liabilities 18,138 16,959
+sub-contractors, telecommunication charges, legal and
+Total other financial liabilities 20,279 19,089 professional charges, brand building expenses, overseas
+(1) Financial liability carried at amortized cost 16,511 15,750 travel expenses, office maintenance and cost of third party
+software and hardware.
+(2) Financial liability carried at fair value
+through profit or loss 728 627
+2.14 Trade payables
+(3) Financial liability carried at fair value
+through other comprehensive income 33 1 (In ₹ crore)
+Financial liability under option Particulars Year ended March 31,
+arrangements on an undiscounted
+2025 2024
+basis 761 690
+Outstanding dues of micro enterprises 8 101
+Contingent consideration on
+and small enterprises (MSME)
+undiscounted basis 33 –
+Outstanding dues of creditors other 4,156 3,855
+(4) The Group entered into financing arrangements with a third party than micro enterprises and small
+towards technology assets taken over by the Group from a customer as a enterprises
+part of transformation project which was not considered as distinct goods
+Total trade payables 4,164 3,956
+or services as the control related to those assets was not transferred to
+The trade payables ageing schedule for the year ended as on March 31, 2025 and March 31, 2024:
+(In ₹ crore)
+Particulars Not due Outstanding for following periods from due date of payment Total
+Less than 1 year 1-2 years 2-3 years More than 3 years
+Outstanding dues to MSME 8 – – – – 8
+101 – – – – 101
+Others 3,742 414 – – – 4,156
+3,688 167 – – – 3,855
+Total trade payables 3,750 414 – – – 4,164
+3,789 167 – – – 3,956
+Relationship with struck off companies.
+There are no transactions with struck off companies for the year ending March 31, 2025 and March 31, 2024.
+2.15 Other liabilities
+Particulars Year ended March 31,
+(In ₹ crore)
+2025 2024
+Particulars Year ended March 31,
+Current
+2025 2024
+Unearned revenue 8,492 7,341
+Non-current
+Others
+Others
+Withholding taxes and others 3,256 3,185
+Accrued defined benefit liability 115 159
+Accrued defined benefit liability 6 5
+Others 100 76
+Others 11 8
+Total non-current other liabilities 215 235
+Total current other liabilities 11,765 10,539
+Total other liabilities 11,980 10,774
+Infosys Integrated Annual Report 2024-25 343
+

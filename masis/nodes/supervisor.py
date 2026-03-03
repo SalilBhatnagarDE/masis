@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -234,83 +235,80 @@ MAX_WALL_CLOCK_SECONDS: int = SAFETY_LIMITS["MAX_WALL_CLOCK_SECONDS"]
 MAX_TASK_RETRIES_PER_NODE: int = int(SAFETY_LIMITS.get("MAX_TASK_RETRIES_PER_NODE", 3))
 
 # ---------------------------------------------------------------------------
-# Few-shot planning prompt (MF-SUP-03)
+# Planning prompt (MF-SUP-03)
 # ---------------------------------------------------------------------------
 
-SUPERVISOR_PLAN_PROMPT = """You are a research task planner for MASIS, a multi-agent intelligence system.
+SUPERVISOR_PLAN_PROMPT = """You are the MASIS Chief Research Orchestrator.
 
-Your job is to decompose a user's query into a task DAG (Directed Acyclic Graph) where:
-- Each task has a type: researcher | web_search | skeptic | synthesizer
-- Tasks can run in parallel (same parallel_group number)
-- Tasks can depend on earlier tasks (dependencies list)
-- Every task MUST have an acceptance_criteria string describing what "success" means
+Goal:
+Build a high-quality TaskPlan DAG that is clear, traceable, and complete.
+Return a TaskPlan only. Do not answer the user question directly.
 
-RULES:
-1. Always end the plan with a skeptic task (to check evidence) then a synthesizer task.
-2. Use parallel_group=1 for initial research tasks that can run simultaneously.
-3. Use parallel_group=2 for the skeptic (needs all research done first).
-4. Use parallel_group=3 for the synthesizer (needs skeptic done).
-5. INTERNAL-FIRST DEFAULT: Do NOT add web_search unless the user explicitly needs external/competitor/industry/latest data.
-6. acceptance_criteria must be measurable: ">=2 chunks, pass_rate>=0.30, self_rag=grounded"
+Available task types:
+- researcher
+- web_search
+- skeptic
+- synthesizer
 
---- EXAMPLE 1 (Simple factual query) ---
-Query: "What was Q3 revenue?"
-Plan:
-  T1(researcher, "Q3 FY26 revenue figures", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T2(skeptic, "Verify Q3 revenue claims from T1", group=2,
-     deps=[T1], criteria="0 unsupported, 0 contradicted, confidence>=0.65")
-  T3(synthesizer, "Synthesize Q3 revenue answer", group=3,
-     deps=[T2], criteria="all claims cited, all citations valid")
-stop_condition: "Q3 revenue figure with source citation"
+Planning contract:
+1. Intent detection:
+   Classify the query into one or more intents:
+   factual_lookup, comparative_analysis, multi_dimension_analysis, risk_or_swot_analysis, trend_analysis.
+2. Scope extraction:
+   Extract entities, dimensions, timeframe, geography/business-unit constraints, and comparison targets.
+3. Coverage matrix:
+   Build required coverage as entity x dimension cells.
+   Every required cell must map to at least one researcher task.
+4. Granular decomposition:
+   Researcher tasks must be atomic and measurable.
+   Do not merge unrelated dimensions in one researcher task.
+   For comparative queries, do not merge multiple entities into one researcher task.
+5. Research query rewriting:
+   Each researcher task query should be retrieval-oriented and explicit:
+   include entity + dimension + timeframe + business synonyms.
+   Keep each query concise and specific.
+6. Flow topology:
+   - parallel_group=1 for initial research tasks
+   - parallel_group=2 for skeptic (depends on all required research)
+   - parallel_group=3 for synthesizer (depends on skeptic)
+   Always end with skeptic then synthesizer.
+7. Stop condition:
+   Must encode completion criteria for full requested coverage.
+   If coverage is incomplete, final synthesis must explicitly disclose missing cells.
+8. Strategic planning discipline:
+   For broad strategy queries (compare, SWOT, risks, performance drivers), decompose by:
+   entity -> metric/dimension -> timeframe.
+   Use one atomic researcher per cell where possible.
+9. Anchor discipline:
+   Keep task queries aligned to target entities in the original query.
+   Never leave placeholders like [Organization Name] in final task queries.
+   Every task query must be executable as written.
 
---- EXAMPLE 2 (Comparative query requiring web data) ---
-Query: "Compare our cloud revenue to AWS and Azure"
-Plan:
-  T1(researcher, "Infosys cloud revenue Q3 FY26", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T2(web_search, "AWS Azure GCP Q3 2025 cloud revenue", group=1,
-     criteria=">=1 relevant result, no timeout")
-  T3(skeptic, "Cross-check internal vs external revenue data", group=2,
-     deps=[T1, T2], criteria="0 contradicted, confidence>=0.65")
-  T4(synthesizer, "Revenue comparison with citations", group=3,
-     deps=[T3], criteria="all claims cited")
-stop_condition: "Comparison of Infosys cloud revenue against AWS and Azure with citations"
+Internal-first policy:
+- Prefer internal researcher tasks first.
+- Add web_search in initial plan only when query explicitly requires external/competitor/latest data.
+- For external entities, prefer internal probes first and let Slow Path add targeted web_search if needed.
 
---- EXAMPLE 3 (Multi-dimensional analysis) ---
-Query: "Analyze AI's impact on operations, margins, and headcount"
-Plan:
-  T1(researcher, "AI impact on Infosys operational efficiency", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T2(researcher, "AI impact on Infosys operating margins", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T3(researcher, "AI impact on Infosys headcount and workforce", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T4(skeptic, "Verify all AI impact evidence across dimensions", group=2,
-     deps=[T1, T2, T3], criteria="0 contradicted, confidence>=0.65")
-  T5(synthesizer, "Multi-dimensional AI impact synthesis", group=3,
-     deps=[T4], criteria="all claims cited, covers all 3 dimensions")
-stop_condition: "Analysis of AI impact on operations, margins, and headcount with citations"
+Acceptance criteria templates:
+- researcher: ">=2 chunks, pass_rate>=0.30, self_rag=grounded"
+- web_search: ">=1 relevant result, no timeout"
+- skeptic: "claims_unsupported<=2, claims_contradicted==0, logical_gaps_count<=3, overall_confidence>=0.65"
+- synthesizer: "citations_count>=claims_count, all_citations_in_evidence_board==true"
 
---- EXAMPLE 4 (Thematic broad query) ---
-Query: "What are the key risks facing the company?"
-Plan:
-  T1(researcher, "Infosys financial risks and exposure", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T2(researcher, "Infosys operational and regulatory risks", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T3(researcher, "Infosys market and competitive risks", group=1,
-     criteria=">=2 chunks, pass_rate>=0.30, self_rag=grounded")
-  T4(skeptic, "Audit all risk evidence for contradictions and gaps", group=2,
-     deps=[T1, T2, T3], criteria="0 contradicted, confidence>=0.65")
-  T5(synthesizer, "Key risks synthesis with prioritization", group=3,
-     deps=[T4], criteria="all claims cited, risks prioritized")
-stop_condition: "Comprehensive risk assessment with sources"
+Few-shot planning patterns (compact):
+- factual_lookup -> 1 researcher -> skeptic -> synthesizer
+- multi_dimension_analysis -> 1 researcher per dimension (parallel) -> skeptic -> synthesizer
+- comparative_analysis -> 1 researcher per entity x dimension cell (parallel) -> skeptic -> synthesizer
+- strategic_swot_analysis -> one researcher per entity x SWOT axis, then skeptic, then synthesizer
 
----
+Quality checklist before returning TaskPlan:
+- All user-requested entities are covered.
+- All user-requested dimensions are covered.
+- Dependencies are valid and acyclic.
+- Acceptance criteria are measurable strings.
+- stop_condition is explicit and testable.
 
-Now decompose the following query. Each task MUST include acceptance_criteria.
-
+Now produce TaskPlan for:
 Query: "{user_query}"
 """
 
@@ -320,8 +318,8 @@ Query: "{user_query}"
 
 SUPERVISOR_SLOW_PROMPT = """You are the Supervisor of a multi-agent research system.
 
-A research task has failed its acceptance criteria or requires a complex decision.
-Analyse the situation and return a structured decision.
+A task failed criteria or routing is blocked.
+Choose the best next control action for quality, coverage, and cost.
 
 CONTEXT:
 - Original query: {original_query}
@@ -338,10 +336,22 @@ DECISION OPTIONS:
 5. stop           --  Abort (use only when evidence is completely absent and all options exhausted)
 
 GUIDELINES:
-- Prefer retry or modify_dag before escalating.
-- Use force_synthesize when budget is low but partial evidence is meaningful.
-- Use stop only when there is NO evidence and ALL retry options are exhausted.
-- For contradictions the Skeptic could reconcile, accept and synthesize.
+- Maintain alignment to the original query intent and requested coverage.
+- Prefer retry or modify_dag before escalate/force_synthesize/stop.
+- Use retry when one task likely failed due weak query formulation.
+- Use modify_dag when structural gaps exist (missing entity/dimension, bad dependency, deadlock).
+- For external-entity gaps after internal probes, add targeted web_search tasks only for missing cells.
+- If an external comparative query has >=2 failed researcher cells with no evidence, prefer modify_dag (targeted web_search per missing entity) over repeated retry.
+- Use escalate only for high-risk ambiguity/contradiction that cannot be resolved automatically.
+- Use force_synthesize only when safety limits are near or evidence is sufficient for partial answer.
+- Use stop only when there is no meaningful evidence path left.
+- If skeptic contradictions are reconciled with clear logic, continue to synthesis.
+
+Few-shot decision patterns (compact):
+- first low-recall researcher failure -> retry with rewritten atomic query
+- repeated low-recall on same missing cell -> modify_dag with targeted web_search
+- DAG incomplete and no runnable tasks -> modify_dag to unblock dependencies
+- budget/time critical with partial coverage -> force_synthesize with explicit disclaimer
 
 Return your decision as structured JSON matching SupervisorDecision schema.
 """
@@ -394,7 +404,7 @@ async def supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
 async def plan_dag(state: Dict[str, Any]) -> Dict[str, Any]:
     """First-turn DAG planning via gpt-4.1 with structured output (MF-SUP-01 through MF-SUP-03).
 
-    Calls the LLM with a few-shot prompt to decompose the user query into a
+    Calls the LLM with a structured planning prompt to decompose the user query into a
     TaskPlan with per-task acceptance criteria. Returns a state update that
     sets task_dag, next_tasks, and supervisor_decision="continue".
 
@@ -467,6 +477,10 @@ async def plan_dag(state: Dict[str, Any]) -> Dict[str, Any]:
     # Internal-first guardrail: remove web_search tasks unless query explicitly
     # requires external/competitor/latest context.
     plan.tasks = _normalize_plan_for_internal_first(original_query, plan.tasks)
+    # Deterministic query cleanup to keep task prompts executable and anchored.
+    plan.tasks = _normalize_task_queries(original_query, plan.tasks)
+    # Deterministic complexity trim to keep first-wave strategic DAGs demo-fast.
+    plan.tasks = _sanitize_initial_plan_complexity(original_query, plan.tasks)
 
     elapsed_ms = (time.monotonic() - start_ts) * 1000
     tokens_used = _estimate_tokens(SUPERVISOR_PLAN_PROMPT, str(plan))
@@ -698,6 +712,19 @@ async def monitor_and_route(state: Dict[str, Any]) -> Dict[str, Any]:
             break
 
     if failed_result is not None:
+        # Deterministic recovery for external comparative/strategic queries:
+        # when the first researcher wave returns no usable internal evidence,
+        # inject targeted web_search tasks instead of spending extra retry turns.
+        auto_recovery_update = _maybe_auto_external_web_recovery(
+            state=state,
+            dag=dag,
+            candidate_results=candidate_results,
+            iteration=iteration,
+            start_ts=start_ts,
+        )
+        if auto_recovery_update is not None:
+            return auto_recovery_update
+
         logger.info(
             "Task %s failed criteria  --  routing to SLOW PATH", failed_result.task_id
         )
@@ -917,6 +944,8 @@ async def supervisor_slow_path(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _EXTERNAL_QUERY_HINTS = {
+    "compare",
+    "comparison",
     "competitor",
     "competitors",
     "peer",
@@ -937,11 +966,31 @@ _EXTERNAL_QUERY_HINTS = {
     "aws",
     "azure",
     "gcp",
+    "google",
+    "alphabet",
+    "adobe",
+    "microsoft",
     "tcs",
     "wipro",
     "accenture",
     "compare with",
+    "swot",
 }
+
+_COMPANY_ALIASES: Dict[str, List[str]] = {
+    "infosys": ["infosys", "our company", "our organization", "our org"],
+    "adobe": ["adobe"],
+    "google": ["google", "alphabet", "gcp", "google cloud"],
+    "microsoft": ["microsoft", "azure"],
+    "amazon": ["amazon", "aws"],
+}
+
+_PLACEHOLDER_PATTERNS = [
+    re.compile(r"\[\s*organization name\s*\]", re.IGNORECASE),
+    re.compile(r"\[\s*company name\s*\]", re.IGNORECASE),
+    re.compile(r"\{\s*organization\s*\}", re.IGNORECASE),
+    re.compile(r"\{\s*company\s*\}", re.IGNORECASE),
+]
 
 
 def _query_requires_external_data(query: str) -> bool:
@@ -976,6 +1025,200 @@ def _normalize_plan_for_internal_first(
         original_query,
     )
     return filtered
+
+
+def _extract_company_anchor(original_query: str) -> str:
+    q = (original_query or "").lower()
+    for canonical, aliases in _COMPANY_ALIASES.items():
+        if any(alias in q for alias in aliases):
+            return canonical.title()
+    if "our " in q:
+        return "Infosys"
+    return "Infosys"
+
+
+def _contains_known_entity(text: str) -> bool:
+    q = (text or "").lower()
+    return any(alias in q for aliases in _COMPANY_ALIASES.values() for alias in aliases)
+
+
+def _clean_company_placeholders(text: str, company_anchor: str) -> str:
+    cleaned = (text or "").strip()
+    for pattern in _PLACEHOLDER_PATTERNS:
+        cleaned = pattern.sub(company_anchor, cleaned)
+    return cleaned
+
+
+def _normalize_task_query_with_anchor(
+    query: str,
+    original_query: str,
+    task_type: str,
+) -> str:
+    company_anchor = _extract_company_anchor(original_query)
+    cleaned = _clean_company_placeholders(query, company_anchor)
+
+    # For internal-first cases, keep company anchor explicit to reduce drift.
+    if task_type != "web_search" and not _query_requires_external_data(original_query):
+        if not _contains_known_entity(cleaned):
+            cleaned = f"{cleaned} for {company_anchor}".strip()
+    elif task_type == "web_search":
+        if not _contains_known_entity(cleaned) and not _query_requires_external_data(original_query):
+            cleaned = f"{cleaned} {company_anchor}".strip()
+
+    return cleaned
+
+
+def _normalize_task_queries(original_query: str, tasks: List[TaskNode]) -> List[TaskNode]:
+    for task in tasks:
+        task.query = _normalize_task_query_with_anchor(task.query, original_query, task.type)
+    return tasks
+
+
+def _is_strategic_query(query: str) -> bool:
+    q = (query or "").lower()
+    strategic_hints = (
+        "swot",
+        "compare",
+        "versus",
+        " vs ",
+        "outlook",
+        "scenario",
+        "bull",
+        "bear",
+        "strategic",
+    )
+    return any(h in q for h in strategic_hints)
+
+
+def _sanitize_initial_plan_complexity(
+    original_query: str,
+    tasks: List[TaskNode],
+) -> List[TaskNode]:
+    """Trim oversized first-turn DAGs to reduce timeout/cost blow-ups.
+
+    Keeps broad coverage while capping parallel breadth. Dependencies are rewired
+    to kept tasks only.
+    """
+    if len(tasks) <= 8:
+        return tasks
+
+    strategic = _is_strategic_query(original_query)
+    external_needed = _query_requires_external_data(original_query)
+
+    max_research = 6 if strategic else 4
+    max_web = 2 if external_needed else 0
+
+    kept: List[TaskNode] = []
+    researcher_count = 0
+    web_count = 0
+    skeptic_kept = False
+    synth_kept = False
+
+    for task in tasks:
+        ttype = getattr(task, "type", "")
+        if ttype == "researcher":
+            if researcher_count >= max_research:
+                continue
+            researcher_count += 1
+            kept.append(task)
+            continue
+
+        if ttype in {"web_search", "deep_web_search"}:
+            if web_count >= max_web:
+                continue
+            web_count += 1
+            kept.append(task)
+            continue
+
+        if ttype == "skeptic":
+            if skeptic_kept:
+                continue
+            skeptic_kept = True
+            kept.append(task)
+            continue
+
+        if ttype == "synthesizer":
+            if synth_kept:
+                continue
+            synth_kept = True
+            kept.append(task)
+            continue
+
+        kept.append(task)
+
+    if not kept:
+        return tasks
+
+    kept_ids = {t.task_id for t in kept}
+    for task in kept:
+        deps = list(getattr(task, "dependencies", []) or [])
+        task.dependencies = [d for d in deps if d in kept_ids]
+
+    if len(kept) < len(tasks):
+        logger.info(
+            "Initial plan complexity trim: kept %d/%d task(s) (research cap=%d, web cap=%d)",
+            len(kept),
+            len(tasks),
+            max_research,
+            max_web,
+        )
+    return kept
+
+
+def _normalized_query_key(text: str) -> str:
+    compact = re.sub(r"[^a-z0-9 ]+", " ", (text or "").lower())
+    return re.sub(r"\s+", " ", compact).strip()
+
+
+def _sanitize_modify_dag_additions(
+    original_query: str,
+    existing_dag: List[TaskNode],
+    additions: List[TaskNode],
+) -> List[TaskNode]:
+    if not additions:
+        return additions
+
+    existing_web_keys = {
+        _normalized_query_key(t.query)
+        for t in existing_dag
+        if getattr(t, "type", "") == "web_search"
+    }
+    sanitized: List[TaskNode] = []
+
+    existing_web_count = sum(1 for t in existing_dag if getattr(t, "type", "") == "web_search")
+    hard_web_cap = int(TOOL_LIMITS.get("web_search", {}).get("max_total", 4))
+    strategic_cap = 2 if not _query_requires_external_data(original_query) else 3
+    allowed_new_web = max(0, min(hard_web_cap - existing_web_count, strategic_cap))
+    added_web = 0
+
+    for task in additions:
+        task.query = _normalize_task_query_with_anchor(task.query, original_query, task.type)
+
+        if task.type != "web_search":
+            sanitized.append(task)
+            continue
+
+        if added_web >= allowed_new_web:
+            logger.info(
+                "Skipping web_search task %s: web addition cap reached (%d)",
+                task.task_id,
+                allowed_new_web,
+            )
+            continue
+
+        key = _normalized_query_key(task.query)
+        if not key:
+            logger.info("Skipping web_search task %s: empty query after normalization", task.task_id)
+            continue
+        if key in existing_web_keys:
+            logger.info("Skipping duplicate web_search task %s: %s", task.task_id, task.query[:100])
+            continue
+
+        existing_web_keys.add(key)
+        added_web += 1
+        sanitized.append(task)
+
+    return sanitized
 
 
 def _build_supervisor_context(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -1016,6 +1259,136 @@ def _build_supervisor_context(state: Dict[str, Any]) -> Dict[str, Any]:
         "cost_remaining": max(0.0, 0.50 - budget.total_cost_usd),
         "last_task_summary": last_task_summary,
         "dag_overview": dag_overview[:600],
+    }
+
+
+def _next_task_id(dag: List[TaskNode]) -> str:
+    max_num = 0
+    for task in dag:
+        task_id = str(getattr(task, "task_id", "") or "")
+        m = re.match(r"^T(\d+)$", task_id)
+        if m:
+            max_num = max(max_num, int(m.group(1)))
+    return f"T{max_num + 1}"
+
+
+def _build_external_web_query(research_query: str) -> str:
+    q = (research_query or "").strip()
+    if not q:
+        return "Find latest reliable public financial data and disclosures relevant to the missing comparison."
+    return f"Find latest reliable public sources for: {q}"
+
+
+def _should_auto_external_web_recovery(
+    state: Dict[str, Any],
+    candidate_results: List[AgentOutput],
+) -> bool:
+    original_query = str(state.get("original_query", ""))
+    if not _query_requires_external_data(original_query):
+        return False
+
+    if not candidate_results:
+        return False
+
+    # Trigger only on early waves to avoid aggressive mid-run rewrites.
+    if int(state.get("iteration_count", 0) or 0) > 3:
+        return False
+
+    # We only auto-recover when a researcher-heavy wave clearly failed to retrieve.
+    researcher_results = [r for r in candidate_results if getattr(r, "agent_type", "") == "researcher"]
+    if len(researcher_results) < 2:
+        return False
+
+    failed_researchers = 0
+    for r in researcher_results:
+        criteria = getattr(r, "criteria_result", {}) or {}
+        chunks = int(criteria.get("chunks_after_grading", 0) or 0)
+        status = str(getattr(r, "status", "") or "")
+        if status in {"failed", "timeout", "rate_limited"} or chunks == 0:
+            failed_researchers += 1
+
+    # Requires broad failure across the wave and no evidence yet.
+    if failed_researchers < len(researcher_results):
+        return False
+    if (state.get("evidence_board", []) or []):
+        return False
+    return True
+
+
+def _maybe_auto_external_web_recovery(
+    state: Dict[str, Any],
+    dag: List[TaskNode],
+    candidate_results: List[AgentOutput],
+    iteration: int,
+    start_ts: float,
+) -> Optional[Dict[str, Any]]:
+    if not _should_auto_external_web_recovery(state, candidate_results):
+        return None
+
+    logger.info("Auto external recovery triggered: researcher wave had no internal evidence")
+
+    # Create targeted web tasks from failed researcher queries.
+    additions: List[TaskNode] = []
+    for result in candidate_results:
+        if getattr(result, "agent_type", "") != "researcher":
+            continue
+        task = find_task(dag, result.task_id)
+        if task is None:
+            continue
+        additions.append(
+            TaskNode(
+                task_id=_next_task_id(dag + additions),
+                type="web_search",
+                query=_build_external_web_query(task.query),
+                dependencies=[],
+                parallel_group=getattr(task, "parallel_group", 1) or 1,
+                acceptance_criteria=">=1 relevant result, no timeout",
+                status="pending",
+            )
+        )
+
+    if not additions:
+        return None
+
+    sanitized = _sanitize_modify_dag_additions(
+        original_query=str(state.get("original_query", "")),
+        existing_dag=dag,
+        additions=additions,
+    )
+    if not sanitized:
+        return None
+
+    existing_ids = {t.task_id for t in dag}
+    for new_task in sanitized:
+        if new_task.task_id not in existing_ids:
+            dag.append(new_task)
+            existing_ids.add(new_task.task_id)
+            logger.info("Auto-recovery added task %s (%s)", new_task.task_id, new_task.type)
+
+    next_ready = get_next_ready_tasks(dag)
+    for task in next_ready:
+        task.status = "running"
+
+    elapsed_ms = (time.monotonic() - start_ts) * 1000
+    entry = {
+        "turn": iteration,
+        "mode": "fast",
+        "action": "auto_modify_dag_external_recovery",
+        "cost_usd": 0.0,
+        "latency_ms": round(elapsed_ms, 1),
+        "reason": "External comparative fallback: internal researcher wave had no evidence",
+        "added_task_ids": [t.task_id for t in sanitized],
+    }
+    updated_log = log_decision(state, entry)
+
+    return {
+        "supervisor_decision": "continue",
+        "iteration_count": iteration + 1,
+        "decision_log": updated_log,
+        "task_dag": dag,
+        "next_tasks": next_ready,
+        "batch_task_results": [],
+        "parallel_batch_mode": False,
     }
 
 
@@ -1126,7 +1499,11 @@ def _handle_retry(
             task.status = "pending"
             task.retry_count += 1
             if decision.retry_spec and decision.retry_spec.new_query:
-                task.query = decision.retry_spec.new_query
+                task.query = _normalize_task_query_with_anchor(
+                    decision.retry_spec.new_query,
+                    state.get("original_query", ""),
+                    task.type,
+                )
             logger.info("Retrying task %s with query: %.80s", task.task_id, task.query)
 
     next_ready = get_next_ready_tasks(dag)
@@ -1159,6 +1536,7 @@ def _handle_modify_dag(
     """Add/remove tasks in the DAG (MF-SUP-10)."""
     dag: List[TaskNode] = list(state.get("task_dag", []))
     spec: Optional[ModifyDagSpec] = decision.modify_dag_spec
+    original_query = state.get("original_query", "")
 
     if spec is not None:
         # Remove tasks
@@ -1166,8 +1544,13 @@ def _handle_modify_dag(
         dag = [t for t in dag if t.task_id not in remove_ids]
 
         # Add new tasks
+        candidate_additions = _sanitize_modify_dag_additions(
+            original_query=original_query,
+            existing_dag=dag,
+            additions=list(spec.add),
+        )
         existing_ids = {t.task_id for t in dag}
-        for new_task in spec.add:
+        for new_task in candidate_additions:
             if new_task.task_id not in existing_ids:
                 dag.append(new_task)
                 logger.info("Added task %s (%s) to DAG", new_task.task_id, new_task.type)

@@ -1,0 +1,257 @@
+{
+  "query_index": 10,
+  "scenario": "SQ4",
+  "query": "Assess Infosys's financial health and capital allocation strategy: how does the $965M free cash flow translate into shareholder returns, what does the operating margin trajectory signal about cost discipline, and how do large deal wins support the revenue growth outlook?",
+  "thread_id": "6395ef48-6192-4bd0-aba1-ea9cd518fe1d",
+  "timestamp": "2026-03-03T08:06:07.258036+00:00",
+  "success": true,
+  "error": null,
+  "final_answer": "Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c898a]. However, this claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns [3d5b645e-0016-4d3d-b53d-b667050c898a].\n\nThe operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter [47b2856f-6445-4946-8122-82c743ec8c06]. Nevertheless, the evidence does not provide a multi-quarter or year-over-year margin trend, so the assessment of sustained cost discipline is limited to this recent period.\n\nLarge deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar' [47b2856f-6445-4946-8122-82c743ec8c06]. While this supports a positive revenue growth outlook, the evidence does not provide forward-looking projections or detailed analysis linking these wins to future revenue growth rates.\n\nCaveats: There is an implicit assumption connecting the reported Q3 performance metrics and subsequent capital allocation actions, but the evidence does not provide explicit data or analysis to support this connection. Additionally, some claims rely on single-source statements, which reduces confidence in their completeness.",
+  "latency_s": 111.56,
+  "iteration_count": 5,
+  "supervisor_decision": "ready_for_validation",
+  "validation_round": 1,
+  "quality_scores": {
+    "faithfulness": 0.1295,
+    "citation_accuracy": 0.1915,
+    "answer_relevancy": 0.1519,
+    "dag_completeness": 1.0
+  },
+  "decision_log": [
+    {
+      "turn": 1,
+      "mode": "slow",
+      "action": "plan",
+      "task_ids": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "cost_usd": 0.021975,
+      "latency_ms": 6469.0,
+      "reason": "First-turn DAG planning",
+      "decision": "plan",
+      "cost": 0.021975,
+      "timestamp": 1772525173.7422607
+    },
+    {
+      "turn": 1,
+      "mode": "fast",
+      "action": "criteria_fail_slow_path",
+      "task_id": "T1",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "Criteria FAIL  --  escalating to Slow Path",
+      "decision": "criteria_fail_slow_path",
+      "cost": 0.0,
+      "timestamp": 1772525234.9611142
+    },
+    {
+      "turn": 1,
+      "mode": "slow",
+      "action": "retry",
+      "reason": "The researcher task (T1) failed to provide information on how Infosys's $965M free cash flow translates into shareholder returns, likely due to insufficient query specificity. Since this is the first ",
+      "cost_usd": 0.011055,
+      "latency_ms": 3500.0,
+      "decision": "retry",
+      "cost": 0.011055,
+      "timestamp": 1772525238.4550564
+    },
+    {
+      "turn": 2,
+      "mode": "fast",
+      "action": "criteria_fail_slow_path",
+      "task_id": "T1",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "Criteria FAIL  --  escalating to Slow Path",
+      "decision": "criteria_fail_slow_path",
+      "cost": 0.0,
+      "timestamp": 1772525256.8788652
+    },
+    {
+      "turn": 2,
+      "mode": "slow",
+      "action": "retry",
+      "reason": "The researcher task (T1) returned only partial evidence regarding Infosys's free cash flow allocation to shareholder returns, specifically lacking details on the interim dividend. Since this is the fi",
+      "cost_usd": 0.011430000000000001,
+      "latency_ms": 2984.0,
+      "decision": "retry",
+      "cost": 0.011430000000000001,
+      "timestamp": 1772525259.869229
+    },
+    {
+      "turn": 3,
+      "mode": "fast",
+      "action": "continue",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "next_tasks_dispatched",
+      "decision": "continue",
+      "cost": 0.0,
+      "timestamp": 1772525269.816497
+    },
+    {
+      "turn": 4,
+      "mode": "fast",
+      "action": "ready_for_validation",
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "reason": "all_tasks_done",
+      "decision": "ready_for_validation",
+      "cost": 0.0,
+      "timestamp": 1772525278.8078835
+    }
+  ],
+  "decision_log_length": 7,
+  "evidence_count": 2,
+  "task_count": 5,
+  "total_tokens_used": 6799,
+  "total_cost_usd": 0.066675,
+  "full_state": {
+    "original_query": "Assess Infosys's financial health and capital allocation strategy: how does the $965M free cash flow translate into shareholder returns, what does the operating margin trajectory signal about cost discipline, and how do large deal wins support the revenue growth outlook?",
+    "query_id": "d0d6d901-97f6-412a-8ffe-d804c837209f",
+    "task_dag": [
+      "task_id='T1' type='researcher' query='How did Infosys allocate its $965 million free cash flow to shareholder returns in the last fiscal year? Please provide details on dividends, share buybacks, and any other capital return mechanisms, citing specific figures or company disclosures.' dependencies=[] parallel_group=1 acceptance_criteria='>=2 chunks, pass_rate>=0.30, self_rag=grounded' status='failed' result_summary='Infosys allocated its $965 million free cash flow to shareholder returns by completing its largest ever share buyback worth ₹18,000 crore and paying out an interim dividend to shareholders, as disclosed by CFO Jayesh Sanghrajka. Specific figures for the interim dividend were not provided in the evidence.' retry_count=1",
+      "task_id='T2' type='researcher' query=\"Analyze Infosys's operating margin trajectory over the past 3 years and interpret what this trend indicates about the company's cost discipline and operational efficiency.\" dependencies=[] parallel_group=1 acceptance_criteria='>=2 chunks, pass_rate>=0.30, self_rag=grounded' status='done' result_summary='No relevant evidence found for this query.' retry_count=0",
+      "task_id='T3' type='researcher' query=\"Investigate Infosys's recent large deal wins and assess how these deals are expected to impact the company's future revenue growth outlook.\" dependencies=[] parallel_group=1 acceptance_criteria='>=2 chunks, pass_rate>=0.30, self_rag=grounded' status='done' result_summary=\"Infosys secured large deal wins totaling $4.8 billion recently, which contributed to broad-based performance and sequential revenue growth of 0.6% in Q3. These substantial deal wins are expected to support the company's future revenue growth outlook positively.\" retry_count=0",
+      "task_id='T4' type='skeptic' query=\"Critically evaluate the findings from the research tasks on Infosys's free cash flow allocation, operating margin trajectory, and large deal wins for logical consistency, unsupported claims, and overall confidence.\" dependencies=['T1', 'T2', 'T3'] parallel_group=2 acceptance_criteria='claims_unsupported<=2, claims_contradicted==0, logical_gaps_count<=3, overall_confidence>=0.65' status='done' result_summary='claims_checked=4, claims_supported=3, claims_contradicted=0, confidence=0.75, logical_gaps=1' retry_count=0",
+      "task_id='T5' type='synthesizer' query=\"Synthesize a comprehensive assessment of Infosys's financial health and capital allocation strategy, explicitly addressing how the $965M free cash flow translates into shareholder returns, what the operating margin trajectory signals about cost discipline, and how large deal wins support the revenue growth outlook. Disclose any missing or uncertain findings.\" dependencies=['T4'] parallel_group=3 acceptance_criteria='citations_count>=claims_count, all_citations_in_evidence_board==true' status='done' result_summary=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c\" retry_count=0"
+    ],
+    "stop_condition": "All three dimensions for Infosys (free cash flow to shareholder returns, operating margin trajectory and cost discipline, large deal wins and revenue growth outlook) are fully researched, critically evaluated, and synthesized with explicit disclosure of any missing or uncertain findings.",
+    "iteration_count": 5,
+    "next_tasks": [
+      "task_id='T5' type='synthesizer' query=\"Synthesize a comprehensive assessment of Infosys's financial health and capital allocation strategy, explicitly addressing how the $965M free cash flow translates into shareholder returns, what the operating margin trajectory signals about cost discipline, and how large deal wins support the revenue growth outlook. Disclose any missing or uncertain findings.\" dependencies=['T4'] parallel_group=3 acceptance_criteria='citations_count>=claims_count, all_citations_in_evidence_board==true' status='done' result_summary=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c\" retry_count=0"
+    ],
+    "supervisor_decision": "ready_for_validation",
+    "last_task_result": "task_id='T5' agent_type='synthesizer' status='success' summary=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c898a]. However, this claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns [3d5b645e-0016-4d3d-b53d-b667050c898a].\\n\\nThe operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter [47b2856f-6445-4946-8122-82c743ec8c06]. Nevertheless, the evidence does not provide a multi-quarter or year-over-year margin trend, so the assessment of sustained cost discipline is limited to this recent period.\\n\\nLarge deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar' [47b2856f-6445-4946-8122-82c743ec8c06]. While this supports a positive revenue growth outlook, the evidence does not provide forward-looking projections or detailed analysis linking these wins to future revenue growth rates.\\n\\nCaveats: There is an implicit assumption connecting the reported Q3 performance metrics and subsequent capital allocation actions, but the evidence does not provide explicit data or analysis to support this connection. Additionally, some claims rely on single-source statements, which reduces confidence in their completeness.\" evidence=[] criteria_result={'citations_count': 5, 'claims_count': 9, 'all_citations_in_evidence_board': True} tokens_used=1232 cost_usd=0.01848 error_detail='' raw_output=SynthesizerOutput(task_id='T5', answer=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c898a]. However, this claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns [3d5b645e-0016-4d3d-b53d-b667050c898a].\\n\\nThe operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter [47b2856f-6445-4946-8122-82c743ec8c06]. Nevertheless, the evidence does not provide a multi-quarter or year-over-year margin trend, so the assessment of sustained cost discipline is limited to this recent period.\\n\\nLarge deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar' [47b2856f-6445-4946-8122-82c743ec8c06]. While this supports a positive revenue growth outlook, the evidence does not provide forward-looking projections or detailed analysis linking these wins to future revenue growth rates.\\n\\nCaveats: There is an implicit assumption connecting the reported Q3 performance metrics and subsequent capital allocation actions, but the evidence does not provide explicit data or analysis to support this connection. Additionally, some claims rely on single-source statements, which reduces confidence in their completeness.\", citations=[Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter.\", entailment_score=0.25), Citation(chunk_id='3d5b645e-0016-4d3d-b53d-b667050c898a', claim_text='Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy.', entailment_score=0.3728813559322034), Citation(chunk_id='3d5b645e-0016-4d3d-b53d-b667050c898a', claim_text='This claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns.', entailment_score=0.075), Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"The operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter.\", entailment_score=0.11666666666666667), Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"Large deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar'.\", entailment_score=0.14285714285714285)], claims_count=9, citations_count=5, all_citations_in_evidence_board=True, is_partial=False, missing_dimensions=[], tokens_used=1232, cost_usd=0.01848)",
+    "batch_task_results": [],
+    "parallel_batch_mode": false,
+    "evidence_board": [
+      "chunk_id='47b2856f-6445-4946-8122-82c743ec8c06' doc_id='ifrs-inr-press-release (4).pdf' parent_chunk_id='d4bf7c2f-dedf-4d34-b428-26765d9f315a' text='IFRS – INR \\nPress Release  \\nInfosys Limited – Press Release                                                                                                                                     Page 2 of 9 \\n   \\n \\n“Our performance was broad-based in Q3 with 0.6% sequential revenue growth, 0.2% adjusted operating \\nmargin expansion, stellar large deal wins at $4.8 billion and robust adjusted free cash generation at $965 \\nmillion in a seasonally weak quarter” said Jayesh Sanghrajka, CFO .' retrieval_score=0.011475409836065573 rerank_score=1.2148960828781128 metadata={'section': 'Financial Performance', 'quarter': 'Q3', 'year': '2026', 'document_type': 'press_release', 'chunk_id': '47b2856f-6445-4946-8122-82c743ec8c06', 'department': 'HR', 'doc_id': 'ifrs-inr-press-release (4).pdf', 'parent_chunk_id': 'd4bf7c2f-dedf-4d34-b428-26765d9f315a', 'source_file': 'ifrs-inr-press-release (4).pdf', 'page_number': 2, 'source_label': 'ifrs-inr-press-release (4).pdf', 'content_type': 'text'} source_label='ifrs-inr-press-release (4).pdf'",
+      "chunk_id='3d5b645e-0016-4d3d-b53d-b667050c898a' doc_id='ifrs-inr-press-release (4).pdf' parent_chunk_id='d4bf7c2f-dedf-4d34-b428-26765d9f315a' text='onally weak quarter” said Jayesh Sanghrajka, CFO . “In line with our capital allocation \\npolicy, we successfully completed the largest ever buyback of `18,000 crore and paid out interim dividend \\nto shareholders”, he added. Client Wins & Testimonials \\n• Infosys extended its strategic collaboration with Metro Bank to transform the bank’s finance \\noperations with a suite of Workday solutions.' retrieval_score=0.015953021776364082 rerank_score=0.10795053094625473 metadata={'quarter': 'Q3', 'department': 'Finance', 'doc_id': 'ifrs-inr-press-release (4).pdf', 'source_label': 'ifrs-inr-press-release (4).pdf', 'content_type': 'text', 'document_type': 'press_release', 'year': '2026', 'chunk_id': '3d5b645e-0016-4d3d-b53d-b667050c898a', 'parent_chunk_id': 'd4bf7c2f-dedf-4d34-b428-26765d9f315a', 'source_file': 'ifrs-inr-press-release (4).pdf', 'section': 'Operations', 'page_number': 2} source_label='ifrs-inr-press-release (4).pdf'"
+    ],
+    "critique_notes": "task_id='T4' claims_checked=4 claims_supported=3 claims_unsupported=0 claims_contradicted=0 weak_evidence_flags=['The claim regarding the largest ever buyback and interim dividend is presented from a single-source press release, limiting independent verification and potentially weakening its evidential strength.'] logical_gaps=['There is an implicit assumption linking the reported Q3 performance metrics (e.g., revenue growth, margin expansion) and subsequent capital allocation actions (buyback and dividend payout) without providing explicit data or analysis to support that connection.'] single_source_warnings=[\"Single-source claim (chunk=3d5b645e-0016-4d3d-b53d-b667050c898a): '“In line with our capital allocation \\npolicy, we successfully completed the larg...'\"] forward_looking_flags=[] reconciliations=[] overall_confidence=0.75 tokens_used=865 cost_usd=0.00346",
+    "synthesis_output": "task_id='T5' answer=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter [47b2856f-6445-4946-8122-82c743ec8c06]. In terms of capital allocation, Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy [3d5b645e-0016-4d3d-b53d-b667050c898a]. However, this claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns [3d5b645e-0016-4d3d-b53d-b667050c898a].\\n\\nThe operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter [47b2856f-6445-4946-8122-82c743ec8c06]. Nevertheless, the evidence does not provide a multi-quarter or year-over-year margin trend, so the assessment of sustained cost discipline is limited to this recent period.\\n\\nLarge deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar' [47b2856f-6445-4946-8122-82c743ec8c06]. While this supports a positive revenue growth outlook, the evidence does not provide forward-looking projections or detailed analysis linking these wins to future revenue growth rates.\\n\\nCaveats: There is an implicit assumption connecting the reported Q3 performance metrics and subsequent capital allocation actions, but the evidence does not provide explicit data or analysis to support this connection. Additionally, some claims rely on single-source statements, which reduces confidence in their completeness.\" citations=[Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"Infosys reported robust financial health in Q3, highlighted by a free cash flow of $965 million, which the company describes as 'robust adjusted free cash generation' during a seasonally weak quarter.\", entailment_score=0.25), Citation(chunk_id='3d5b645e-0016-4d3d-b53d-b667050c898a', claim_text='Infosys stated that it completed its largest ever buyback of ₹18,000 crore and paid out an interim dividend to shareholders, actions described as being in line with its capital allocation policy.', entailment_score=0.3728813559322034), Citation(chunk_id='3d5b645e-0016-4d3d-b53d-b667050c898a', claim_text='This claim is supported by a single source, so confidence in the completeness of this information is reduced, and there is no explicit data linking the $965 million free cash flow directly to the scale or timing of these shareholder returns.', entailment_score=0.075), Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"The operating margin trajectory showed a 0.2% sequential expansion, which, alongside the CFO's commentary, signals some cost discipline during the quarter.\", entailment_score=0.11666666666666667), Citation(chunk_id='47b2856f-6445-4946-8122-82c743ec8c06', claim_text=\"Large deal wins were strong, totaling $4.8 billion in the quarter, which the company highlights as 'stellar'.\", entailment_score=0.14285714285714285)] claims_count=9 citations_count=5 all_citations_in_evidence_board=True is_partial=False missing_dimensions=[] tokens_used=1232 cost_usd=0.01848",
+    "quality_scores": {
+      "faithfulness": 0.1295,
+      "citation_accuracy": 0.1915,
+      "answer_relevancy": 0.1519,
+      "dag_completeness": 1.0
+    },
+    "validation_pass": true,
+    "validation_round": 1,
+    "token_budget": "total_tokens_used=6799 total_cost_usd=0.066675 remaining=93201 api_calls={'supervisor_plan': 1, 'researcher': 4, 'supervisor_slow': 2, 'skeptic': 1, 'synthesizer': 1} start_time=1772525167.2701476",
+    "api_call_counts": {
+      "researcher": 4,
+      "skeptic": 1,
+      "synthesizer": 1
+    },
+    "start_time": 1772525167.2701476,
+    "force_synthesize": false,
+    "enable_ambiguity_hitl": false,
+    "hitl_payload": null,
+    "decision_log": [
+      {
+        "turn": 1,
+        "mode": "slow",
+        "action": "plan",
+        "task_ids": [
+          "T1",
+          "T2",
+          "T3"
+        ],
+        "cost_usd": 0.021975,
+        "latency_ms": 6469.0,
+        "reason": "First-turn DAG planning",
+        "decision": "plan",
+        "cost": 0.021975,
+        "timestamp": 1772525173.7422607
+      },
+      {
+        "turn": 1,
+        "mode": "fast",
+        "action": "criteria_fail_slow_path",
+        "task_id": "T1",
+        "cost_usd": 0.0,
+        "latency_ms": 0.0,
+        "reason": "Criteria FAIL  --  escalating to Slow Path",
+        "decision": "criteria_fail_slow_path",
+        "cost": 0.0,
+        "timestamp": 1772525234.9611142
+      },
+      {
+        "turn": 1,
+        "mode": "slow",
+        "action": "retry",
+        "reason": "The researcher task (T1) failed to provide information on how Infosys's $965M free cash flow translates into shareholder returns, likely due to insufficient query specificity. Since this is the first ",
+        "cost_usd": 0.011055,
+        "latency_ms": 3500.0,
+        "decision": "retry",
+        "cost": 0.011055,
+        "timestamp": 1772525238.4550564
+      },
+      {
+        "turn": 2,
+        "mode": "fast",
+        "action": "criteria_fail_slow_path",
+        "task_id": "T1",
+        "cost_usd": 0.0,
+        "latency_ms": 0.0,
+        "reason": "Criteria FAIL  --  escalating to Slow Path",
+        "decision": "criteria_fail_slow_path",
+        "cost": 0.0,
+        "timestamp": 1772525256.8788652
+      },
+      {
+        "turn": 2,
+        "mode": "slow",
+        "action": "retry",
+        "reason": "The researcher task (T1) returned only partial evidence regarding Infosys's free cash flow allocation to shareholder returns, specifically lacking details on the interim dividend. Since this is the fi",
+        "cost_usd": 0.011430000000000001,
+        "latency_ms": 2984.0,
+        "decision": "retry",
+        "cost": 0.011430000000000001,
+        "timestamp": 1772525259.869229
+      },
+      {
+        "turn": 3,
+        "mode": "fast",
+        "action": "continue",
+        "cost_usd": 0.0,
+        "latency_ms": 0.0,
+        "reason": "next_tasks_dispatched",
+        "decision": "continue",
+        "cost": 0.0,
+        "timestamp": 1772525269.816497
+      },
+      {
+        "turn": 4,
+        "mode": "fast",
+        "action": "ready_for_validation",
+        "cost_usd": 0.0,
+        "latency_ms": 0.0,
+        "reason": "all_tasks_done",
+        "decision": "ready_for_validation",
+        "cost": 0.0,
+        "timestamp": 1772525278.8078835
+      }
+    ]
+  },
+  "timed_out": false,
+  "timeout_s": 240,
+  "evaluation": {
+    "right": [
+      "Pipeline completed without runtime exception",
+      "Rich answer (1828 chars) — suitable for deep-research query",
+      "Validator passed without forced safety cap",
+      "Complex DAG with 5 tasks — demonstrates parallel agent orchestration",
+      "Passed validation in first round",
+      "Supervisor used 5 turns (within limit)"
+    ],
+    "wrong": [
+      "Sparse evidence (2 chunks) — strategic query needs more coverage"
+    ],
+    "forced_pass": false
+  }
+}

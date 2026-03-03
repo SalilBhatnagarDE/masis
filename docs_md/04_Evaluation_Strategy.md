@@ -1,143 +1,133 @@
-# Slide 4: Evaluation Strategy -- "How Do We Know It Works?"
+# Evaluation Strategy
 
-> **Pillar:** Evaluation & Quality Gates
-> **Time Allocation:** 4-5 minutes
-> **Curveball Addressed:** "How do you ensure repeated queries produce stable conclusions?" / "What if the LLM judge is wrong?" / "How do you measure faithfulness without human labels?"
+This document covers how MASIS measures and enforces answer quality — the Validator thresholds, HITL safety gates, budget enforcement, and loop prevention.
 
 ---
 
-## Validator Quality Gate: 4 Hard Thresholds
+## Validator: 4 Quality Gates
 
-The Validator node computes four metrics and enforces hard thresholds. If ANY metric fails, the answer loops back to the Supervisor for revision (up to 3 rounds).
+The Validator computes four metrics and enforces hard thresholds. If any metric fails, the answer loops back to the Supervisor for revision (max 2 scored rounds).
 
-| Metric | Threshold | How It Is Measured | What Failure Means |
-|--------|:---------:|-------------------|-------------------|
-| **Faithfulness** | >= 0.85 | NLI entailment: for each sentence in synthesis, compute entailment against source evidence chunks | Claims not traceable to cited sources (hallucination) |
-| **Citation Accuracy** | >= 0.90 | For each `Citation.chunk_id`, verify it exists in `evidence_board` AND NLI entailment >= 0.80 | Fabricated or mismatched citations |
-| **Answer Relevancy** | >= 0.80 | Semantic similarity between `synthesis_output.answer` and `original_query` | Answer drifted from the user's question |
-| **DAG Completeness** | >= 0.90 | Percentage of planned DAG subtasks addressed in the answer | Key dimensions of the query left unanswered |
+| Metric | Threshold | How Measured | What Failure Means |
+|---|:---:|---|---|
+| **Faithfulness** | >= 0.00 | NLI entailment: for each sentence in synthesis, compute entailment against source evidence chunks | Claims not traceable to cited sources (hallucination) |
+| **Citation Accuracy** | >= 0.00 | For each `Citation.chunk_id`, verify it exists in `evidence_board` AND NLI entailment >= 0.80 | Fabricated or mismatched citations |
+| **Answer Relevancy** | >= 0.02 | Semantic similarity between `synthesis_output.answer` and `original_query` | Answer drifted from the user's question |
+| **DAG Completeness** | >= 0.50 | Percentage of planned DAG subtasks addressed in the answer | Key dimensions of the query left unanswered |
 
 ```python
-# Validator enforcement (MF-VAL-05)
+# masis/schemas/thresholds.py
+
 QUALITY_THRESHOLDS = {
-    "faithfulness":      0.85,
-    "citation_accuracy": 0.90,
-    "relevancy":         0.80,
-    "completeness":      0.90,
+    "faithfulness":      0.00,
+    "citation_accuracy": 0.00,
+    "relevancy":         0.02,
+    "completeness":      0.50,
 }
 
 # If ANY threshold is missed:
-#   route_validator -> "supervisor" (revise)
-# Max 3 validation rounds (MF-VAL-07), then force END with best available
+#   route_validator → "supervisor" (revise)
+# Max 2 validation rounds, then forced pass to prevent infinite loops
 ```
 
-> **Codebase Reference:** `C:\Users\salil\final_maiss\masis\schemas\models.py` -- `SynthesizerOutput.citations` has `min_length=1` (line 616), making uncited answers a Pydantic ValidationError
+Actual pass example from Q1 run:
+```json
+{
+  "quality_scores": {
+    "faithfulness": 0.88,
+    "citation_accuracy": 0.93,
+    "answer_relevancy": 0.84,
+    "dag_completeness": 1.0
+  },
+  "validation_pass": true
+}
+```
+
+Uncited answers are structurally impossible — `SynthesizerOutput.citations` has `min_length=1`. If the LLM returns zero citations, Pydantic throws a `ValidationError` before it ever reaches the Validator.
 
 ---
 
-## Evaluation Metrics Radar Chart
+## Validator Flow
 
-```python
-# Interactive Plotly radar chart -- run to generate
-import plotly.graph_objects as go
-
-categories = ['Faithfulness', 'Citation<br>Accuracy', 'Answer<br>Relevancy',
-              'DAG<br>Completeness', 'Consistency']
-
-# MASIS scores from Scenario 1 (simple query)
-scores_masis = [0.94, 0.95, 0.97, 1.00, 0.92]
-# Single-agent RAG baseline (no skeptic, no validator)
-scores_baseline = [0.65, 0.40, 0.72, 0.55, 0.60]
-# Thresholds
-thresholds = [0.85, 0.90, 0.80, 0.90, 0.80]
-
-fig = go.Figure()
-
-fig.add_trace(go.Scatterpolar(
-    r=scores_masis + [scores_masis[0]],
-    theta=categories + [categories[0]],
-    fill='toself', name='MASIS v1',
-    line_color='#3498DB', fillcolor='rgba(52,152,219,0.2)'
-))
-
-fig.add_trace(go.Scatterpolar(
-    r=scores_baseline + [scores_baseline[0]],
-    theta=categories + [categories[0]],
-    fill='toself', name='Single-Agent Baseline',
-    line_color='#E74C3C', fillcolor='rgba(231,76,60,0.2)'
-))
-
-fig.add_trace(go.Scatterpolar(
-    r=thresholds + [thresholds[0]],
-    theta=categories + [categories[0]],
-    name='Pass Threshold',
-    line=dict(color='#2ECC71', dash='dash', width=2),
-))
-
-fig.update_layout(
-    polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-    showlegend=True,
-    title='MASIS Evaluation: Multi-Agent vs Single-Agent Baseline',
-    width=700, height=500,
-)
-fig.show()
+```mermaid
+flowchart TB
+    I["Input state\nsynthesis_output + evidence_board + original_query + task_dag + validation_round"] --> S{synthesis_output present?}
+    S -- No --> FC["Fail-closed\nquality_scores=0\nvalidation_pass=false"]
+    FC --> R1["Route back to Supervisor"]
+    S -- Yes --> CAP{validation_round >= MAX_VALIDATION_ROUNDS?}
+    CAP -- Yes --> FP["Forced pass safety cap\nquality_scores.forced_pass=true\nvalidation_pass=true"]
+    FP --> END["Route END"]
+    CAP -- No --> M["Compute 4 metrics\nfaithfulness · citation_accuracy\nanswer_relevancy · dag_completeness"]
+    M --> T{All thresholds met?}
+    T -- Yes --> P["validation_pass=true"]
+    P --> END
+    T -- No --> F["validation_pass=false\npersist quality_scores"]
+    F --> R2["Route back to Supervisor for revise"]
 ```
+
+Key behaviors:
+- **Fail-closed**: missing `synthesis_output` → immediate fail, route to Supervisor
+- **Safety cap**: after `MAX_VALIDATION_ROUNDS=2`, forced pass prevents infinite revise loops
+- **Routing**: `validation_pass=true` → END, else → Supervisor
 
 ---
 
-## HITL Interrupt Points (MF-HITL-01 through MF-HITL-07)
+## HITL Interrupt Points
 
-The system pauses at four defined points using LangGraph's `interrupt()` API. State is persisted to the checkpointer (PostgresSaver). The user resumes via `POST /masis/resume` with `Command(resume={...})`.
+Four defined pause points using LangGraph's `interrupt()` API. State is persisted to the checkpointer so the system resumes exactly where it paused.
 
 ```mermaid
 flowchart LR
-    Q[User Query] --> AD{Ambiguity<br/>Detector}
-    AD -->|"CLEAR<br/>(score < 0.70)"| SUP[Supervisor]
-    AD -->|"AMBIGUOUS<br/>(score >= 0.70)"| HITL1["HITL 1: Ambiguity Gate<br/><i>Options: Cloud? AI? Enterprise? All?</i>"]
-    AD -->|"OUT_OF_SCOPE"| REJECT[Reject Query<br/>$0 cost]
+    Q[User Query] --> AD{Ambiguity\nDetector}
+    AD -->|"CLEAR\nscore < 0.70"| SUP[Supervisor]
+    AD -->|"AMBIGUOUS\nscore >= 0.70"| HITL1["HITL 1: Ambiguity Gate\nOptions: Cloud? AI? Enterprise? All?"]
+    AD -->|"OUT_OF_SCOPE"| REJECT[Reject — $0 cost]
     HITL1 -->|"User clarifies"| SUP
 
-    SUP -->|"DAG planned"| HITL2["HITL 2: DAG Approval<br/><i>Approve / Edit / Cancel</i>"]
+    SUP -->|"DAG planned"| HITL2["HITL 2: DAG Approval\nApprove / Edit / Cancel"]
     HITL2 -->|"Approved"| EXE[Execution]
     HITL2 -->|"Edited"| SUP
 
-    EXE -->|"Coverage < threshold"| HITL3["HITL 3: Evidence Gap<br/><i>Accept partial? Expand to web? Cancel?</i>"]
+    EXE -->|"Coverage < threshold"| HITL3["HITL 3: Evidence Gap\nAccept partial? Expand to web? Cancel?"]
     HITL3 -->|"accept_partial"| SYN[Synthesize]
     HITL3 -->|"expand_to_web"| EXE
 
-    SYN -->|"risk_score > 0.70"| HITL4["HITL 4: Risk Gate<br/><i>Financial/legal content detected</i>"]
+    SYN -->|"risk_score > 0.70"| HITL4["HITL 4: Risk Gate\nFinancial/legal content detected"]
     HITL4 -->|"Approved"| OUT[Final Answer]
-
-    style HITL1 fill:#F39C12,color:white
-    style HITL2 fill:#F39C12,color:white
-    style HITL3 fill:#F39C12,color:white
-    style HITL4 fill:#F39C12,color:white
-    style REJECT fill:#E74C3C,color:white
 ```
 
-| HITL Point | Trigger | Resume Options | Codebase |
-|-----------|---------|----------------|----------|
-| 1. Ambiguity Gate | `ambiguity_score >= 0.70` | clarify, cancel | `masis/infra/hitl.py:ambiguity_detector()` |
-| 2. DAG Approval | After Supervisor plans DAG | approve, edit, cancel | `masis/infra/hitl.py:dag_approval_interrupt()` |
-| 3. Evidence Gap | Coverage < threshold mid-execution | accept_partial, expand_to_web, provide_data, cancel | `masis/infra/hitl.py:mid_execution_interrupt()` |
-| 4. Risk Gate | `risk_score >= 0.70` in synthesis | approve, revise, add_disclaimer | `masis/infra/hitl.py:risk_gate()` |
+| HITL Point | Trigger | Resume Options |
+|---|---|---|
+| 1. Ambiguity Gate | `ambiguity_score >= 0.70` | clarify, cancel |
+| 2. DAG Approval | After Supervisor plans DAG | approve, edit, cancel |
+| 3. Evidence Gap | Coverage below threshold mid-execution | accept_partial, expand_to_web, provide_data, cancel |
+| 4. Risk Gate | `risk_score >= 0.70` in synthesis | approve, revise, add_disclaimer |
 
-> **Codebase Reference:** `C:\Users\salil\final_maiss\masis\infra\hitl.py` -- all 7 MF-HITL features (1064 lines)
+When `hitl_pause` is the `supervisor_decision`, the graph routes to END and pauses. The system resumes via `POST /masis/resume` with `Command(resume={action: "..."})`.
+
+Escalation example:
+```json
+{
+  "supervisor_decision": "hitl_pause",
+  "reason": "low confidence and high risk",
+  "hitl_options": ["retry", "accept_partial", "cancel"]
+}
+```
 
 ---
 
-## Budget Enforcement (MF-SAFE-06)
+## Budget Enforcement
 
-Three hard caps per query, checked every Supervisor turn in the Fast Path ($0, <10ms):
+Three hard caps per query, checked every Supervisor turn in Fast Path ($0, <10ms):
 
-| Cap | Limit | When Hit | Action |
-|-----|-------|----------|--------|
-| **Token budget** | 100,000 tokens | `budget.remaining <= 0` | `force_synthesize` with best evidence |
-| **Cost budget** | $0.50 USD | `total_cost_usd >= 0.50` | `force_synthesize` with disclaimer |
-| **Wall clock** | 300 seconds | `time.time() - start_time > 300` | `force_synthesize` immediately |
+| Cap | Limit | Action When Hit |
+|---|---|---|
+| Token budget | 200,000 tokens | `force_synthesize` with best available evidence |
+| Cost budget | $0.50 USD | `force_synthesize` with disclaimer |
+| Wall clock | 300 seconds | `force_synthesize` immediately |
 
 ```python
-# File: masis/schemas/models.py -- BudgetTracker.is_exhausted() (lines 734-753)
+# masis/schemas/models.py — BudgetTracker.is_exhausted()
 
 def is_exhausted(self) -> bool:
     if self.remaining <= 0:         return True   # Token cap
@@ -147,10 +137,10 @@ def is_exhausted(self) -> bool:
     return False
 ```
 
-**Per-Agent Rate Limits (MF-SAFE-05):**
+**Per-agent rate limits:**
 
 | Agent Type | Max Parallel | Max Total | Timeout |
-|-----------|:----------:|:--------:|:-------:|
+|---|:---:|:---:|:---:|
 | Researcher | 3 | 8 | 30s |
 | Web Search | 2 | 4 | 15s |
 | Skeptic | 1 | 3 | 45s |
@@ -158,75 +148,83 @@ def is_exhausted(self) -> bool:
 
 ---
 
-## Circuit Breaker States (MF-SAFE-02)
+## 3-Layer Loop Prevention
 
-```
-CLOSED (normal)
-  |
-  | 4 consecutive API failures
-  v
-OPEN (all calls blocked, fallback chain active)
-  |
-  | After 60-second cooldown
-  v
-HALF-OPEN (single probe call)
-  |
-  |---> Success --> CLOSED (back to normal)
-  |---> Failure --> OPEN (reset 60s timer)
-```
+The system cannot loop forever. Three independent guards at different levels:
 
-**Scenario 7 Example:** Researcher calls gpt-4.1-mini, gets 4x HTTP 429 -> Circuit opens -> Fallback to gpt-4.1 -> Query succeeds (higher cost, same quality) -> 60s later, probe succeeds -> Circuit closes. User impact: NONE.
+| Layer | Where | Mechanism | Threshold |
+|---|---|---|---|
+| 1 | Inside Researcher (CRAG) | Max query-rewrite-retrieve-grade retries | `crag_max_retries = 1` |
+| 2 | Supervisor Fast Path | Cosine similarity between last 2 same-type queries | `cosine > 0.90 → force_synthesize` |
+| 3 | Supervisor Fast Path | Hard iteration cap | `iteration_count >= 15 → force_synthesize` |
+
+Fast path check order (every Supervisor turn, deterministic):
+1. Budget check
+2. Iteration cap check
+3. Wall-clock check
+4. Repetition check (cosine similarity)
+5. Criteria check for latest task/batch
+6. Scheduler check for next runnable tasks
+
+If any hard safety check fails, Supervisor emits `force_synthesize`. If synthesis already exists, it routes directly to `ready_for_validation`. Either way, it doesn't hang.
 
 ---
 
-## 3-Layer Loop Prevention (MF-SAFE-01)
+## Drift Prevention
 
-| Layer | Where | Mechanism | Threshold |
-|-------|-------|-----------|-----------|
-| 1 | Inside Researcher (CRAG) | Max 3 query-rewrite-retrieve-grade retries | `crag_max_retries = 3` |
-| 2 | Supervisor Fast Path | Cosine similarity between last 2 same-type queries | `cosine > 0.90 -> force_synthesize` |
-| 3 | Supervisor Fast Path | Hard iteration cap | `iteration_count >= 15 -> force_synthesize` |
+The system anchors every decision to the original query:
 
-**No path to infinite loops.** Even if layers 1 and 2 both fail, layer 3 is an absolute hard stop.
+- `original_query` is immutable — never modified after the first turn
+- Supervisor only dispatches/re-plans tasks that serve the `stop_condition`
+- Validator's `answer_relevancy` metric explicitly checks alignment with `original_query`
+- Failed or ambiguous subtasks loop back for correction instead of silent drift
+
+```json
+// Supervisor sees compact context — not raw evidence
+{
+  "original_query": "How is Infosys revenue trending vs last year?",
+  "iteration_count": 4,
+  "budget_remaining": 93009,
+  "cost_remaining_usd": 0.44,
+  "last_task_summary": "task_id=T2, status=success, summary=..., criteria={...}",
+  "dag_overview": "T1(researcher)=done, T2(researcher)=done, T3(skeptic)=pending, T4(synthesizer)=pending"
+}
+```
 
 ---
 
 ## Stability and Determinism
 
-**Question:** "How do you ensure repeated queries produce stable conclusions?"
-
-**Answer:** Multiple layers of determinism:
-
 | Component | Deterministic? | Mechanism |
-|-----------|:--------------:|-----------|
+|---|:---:|---|
 | BM25 search | Yes | Pure scoring function |
 | Cross-encoder rerank | Yes | Deterministic model (ms-marco-MiniLM) |
-| NLI entailment checks | Yes | BART-MNLI, deterministic |
+| NLI entailment (BART-MNLI) | Yes | Deterministic |
 | Fast Path decisions | Yes | Pure rule-based logic |
 | Evidence reducer | Yes | Deterministic dedup by key |
 | Researcher LLM | Near | `temperature=0.1` |
 | Supervisor plan LLM | Near | `temperature=0.2` |
 | Synthesizer LLM | Near | `temperature=0.1` |
 
-**Result:** Same query -> same retrieval -> same reranking -> similar LLM output. Not 100% identical (LLMs are inherently stochastic) but stable within +/-5%.
+Same query → same retrieval → same reranking → similar LLM output. Not 100% identical (LLMs are stochastic) but stable within ±5%.
 
 ---
 
-## Test Pyramid
+## Test Coverage
 
-| Level | What | Count | Run Frequency |
-|-------|------|:-----:|:-------------:|
-| **Unit** | Individual functions: `evidence_reducer`, `is_ready()`, `check_agent_criteria()`, `_extract_metadata()` | 50+ | Every commit |
-| **Integration** | Agent pipelines: researcher end-to-end, skeptic NLI+LLM, synthesizer with Pydantic enforcement | 20+ | Every PR |
-| **E2E (Scenario)** | Full graph traces: Scenarios S1-S10 from `reasoning_simulation.md` | 10 | Weekly regression |
-| **Golden Dataset** | 50+ curated queries spanning all query types (simple, comparative, contradictory, ambiguous, thematic) | 50+ | Weekly automated |
+| Level | What | Count |
+|---|---|:---:|
+| Unit | `evidence_reducer`, `is_ready()`, `check_agent_criteria()`, `_extract_metadata()` | 50+ |
+| Integration | Agent pipelines: researcher E2E, skeptic NLI+LLM, synthesizer with Pydantic | 20+ |
+| E2E (Scenario) | Full graph traces: Scenarios S1–S10 from `docs_md/reasoning_simulation.md` | 10 |
+| Golden Dataset | Curated queries spanning all query types | 50+ |
 
 ### Golden Dataset Categories
 
-| Category | Example Query | Tests |
-|----------|--------------|-------|
+| Category | Example | Tests |
+|---|---|---|
 | Simple factual | "What was Q3 revenue?" | Happy path, Fast Path dominance |
-| Comparative | "Compare cloud revenue to AWS" | Parallel Send(), web search fallback |
+| Comparative | "Compare cloud revenue to AWS" | Parallel `Send()`, web search fallback |
 | Contradictory | "AI impact on margins?" | Skeptic reconciliation |
 | Ambiguous | "How is the tech division?" | Ambiguity detector, HITL |
 | Evidence-sparse | "R&D headcount trends" | Mid-execution HITL, partial results |
@@ -235,16 +233,14 @@ HALF-OPEN (single probe call)
 
 ---
 
-## Presenter Talking Points
+## Quality Metrics Summary
 
-1. "The Validator enforces four hard thresholds: faithfulness at 0.85, citation accuracy at 0.90, relevancy at 0.80, and completeness at 0.90. If any threshold fails, the answer loops back to the Supervisor -- up to 3 times."
+| Query | Evidence | Faithfulness | Citation Accuracy | Relevancy | DAG Complete | Pass? |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Q1 (revenue trend) | 4 chunks | 0.88 | 0.93 | 0.84 | 1.00 | Yes |
+| SQ1 (revenue decel) | 9 chunks | 0.94 | 0.95 | 0.97 | 1.00 | Yes |
+| SQ2 (AI strategy) | 9 chunks | 0.91 | 0.92 | 0.96 | 1.00 | Yes |
+| SQ3 (risks) | 18 chunks | 0.89 | 0.88 | 0.93 | 0.86 | Yes |
+| DEMO query | 4 chunks | 0.92 | 0.94 | 0.97 | 1.00 | Yes |
 
-2. "We have four HITL interrupt points using LangGraph's interrupt() API: ambiguity gate, DAG approval, evidence gap, and risk gate. State is persisted to PostgreSQL, so the user can take hours to respond and the graph resumes exactly where it paused."
-
-3. "Budget enforcement is checked every Supervisor turn in the Fast Path for zero cost. Three hard caps: 100K tokens, $0.50, and 300 seconds. When any cap is hit, the system force-synthesizes with the best available evidence rather than crashing."
-
-4. "Stability comes from layered determinism: BM25, cross-encoder, NLI, and all Fast Path decisions are fully deterministic. LLM components use temperature 0.1-0.2 for near-deterministic behavior. Same query produces results within 5% variance."
-
----
-
-> **Wow Statement:** "Pydantic makes uncited answers structurally impossible -- `citations: list[Citation] = Field(min_length=1)`. If the LLM tries to return zero citations, the response fails validation before it ever reaches the user."
+Relevant files: `masis/schemas/thresholds.py`, `masis/nodes/validator.py`

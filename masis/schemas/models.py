@@ -684,8 +684,8 @@ class BudgetTracker(BaseModel):
     total_tokens_used: int = Field(default=0, ge=0)
     total_cost_usd: float = Field(default=0.0, ge=0.0)
     remaining: int = Field(
-        default=100_000,
-        description="Tokens remaining out of max_tokens (100,000 per query).",
+        default=200_000,
+        description="Tokens remaining out of max_tokens (200,000 per query).",
     )
     api_calls: Dict[str, int] = Field(
         default_factory=dict,
@@ -876,6 +876,12 @@ def batch_task_results_reducer(
 
     Dedup key: task_id. If the same task_id appears again, keep the newest item.
     """
+    # Explicit clear semantics: when a node writes [], flush stale batch results.
+    # This is required after supervisor decisions so previous-wave failures are
+    # not re-evaluated on later turns.
+    if not new:
+        return []
+
     merged: Dict[str, AgentOutput] = {}
     for output in existing:
         merged[output.task_id] = output

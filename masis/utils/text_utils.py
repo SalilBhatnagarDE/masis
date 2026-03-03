@@ -70,6 +70,14 @@ from masis.schemas.models import EvidenceChunk, MASISState, TaskNode
 logger = logging.getLogger(__name__)
 FAST_REPETITION_CHECK: bool = os.getenv("FAST_REPETITION_CHECK", "1").lower() in {"1", "true", "yes"}
 
+_ENTITY_ALIASES = {
+    "infosys": ["infosys"],
+    "adobe": ["adobe"],
+    "google": ["google", "alphabet", "gcp", "google cloud"],
+    "microsoft": ["microsoft", "azure"],
+    "amazon": ["amazon", "aws"],
+}
+
 
 # ---------------------------------------------------------------------------
 # ENG-03 / M4 / S1 — u_shape_order  (MF-SYN-01)
@@ -250,12 +258,31 @@ def is_repetitive(state: Dict[str, Any]) -> bool:
             queries = done_by_type.setdefault(task.type, [])
             queries.append(task.query)
 
+    original_query = str(state.get("original_query", "")).lower()
+    comparative_intent = any(
+        marker in original_query
+        for marker in ("compare", "comparison", "versus", " vs ", "benchmark", "swot")
+    )
+
     # Check each type's last two queries
     for task_type, queries in done_by_type.items():
         if len(queries) < 2:
             continue
         q1 = queries[-2]
         q2 = queries[-1]
+
+        # Comparative workflows intentionally use near-identical templates per entity.
+        # Do not flag repetition when entity targets differ.
+        e1 = _detect_entity_key(q1)
+        e2 = _detect_entity_key(q2)
+        if comparative_intent and e1 and e2 and e1 != e2:
+            logger.debug(
+                "is_repetitive: skip for comparative entity pair (%s vs %s)",
+                e1,
+                e2,
+            )
+            continue
+
         similarity = _compute_cosine_similarity(q1, q2)
         logger.debug(
             "is_repetitive: type=%s, q1='%s...', q2='%s...', cosine=%.3f, threshold=%.2f",
@@ -270,6 +297,14 @@ def is_repetitive(state: Dict[str, Any]) -> bool:
             return True
 
     return False
+
+
+def _detect_entity_key(text: str) -> Optional[str]:
+    q = (text or "").lower()
+    for key, aliases in _ENTITY_ALIASES.items():
+        if any(alias in q for alias in aliases):
+            return key
+    return None
 
 
 def _compute_cosine_similarity(text1: str, text2: str) -> float:

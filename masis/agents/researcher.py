@@ -220,9 +220,11 @@ async def hyde_rewrite(query: str) -> str:
     llm = ChatOpenAI(model=model_name, temperature=0.1, max_tokens=200)
 
     system_prompt = (
-        "You are a research assistant. Generate a hypothetical document passage "
-        "that would answer the following question. Write 3-5 sentences as if "
-        "you are quoting from the actual document. Be specific and factual in style."
+        "You are a retrieval query expansion assistant for enterprise research. "
+        "Generate a concise hypothetical passage that is likely to appear in internal reports. "
+        "Preserve the original intent and timeframe. Use factual business language, "
+        "avoid speculation, and avoid unsupported precise numbers. "
+        "Write 4-6 sentences with strong topical keywords."
     )
     human_message = f"Question: {query}"
 
@@ -700,9 +702,13 @@ async def _grade_chunks(
     relevant_chunks: List[EvidenceChunk] = []
 
     grading_prompt_template = (
-        "Is the following text relevant to the research query?\n\n"
-        "Query: {query}\n\nText: {text}\n\n"
-        "Answer with a single word: YES or NO."
+        "Task: judge whether the text is useful evidence for the query.\n\n"
+        "Query: {query}\n\n"
+        "Text: {text}\n\n"
+        "Decision rule:\n"
+        "- YES: directly answers the query OR provides strong supporting evidence for the same entity/timeframe/dimension.\n"
+        "- NO: mostly off-topic, different entity/timeframe, or generic filler.\n\n"
+        "Return exactly one token: YES or NO."
     )
 
     for chunk in chunks:
@@ -744,14 +750,36 @@ async def _rewrite_query(query: str) -> Tuple[str, str]:
     model_name = get_model("researcher")
     llm = ChatOpenAI(model=model_name, temperature=0.1)
 
+    entities = _detect_entities(query)
+    entity_line = ", ".join(entities) if entities else "none_detected"
+
     prompt = (
-        f"The following research query did not find relevant results. "
-        f"Rewrite it to be more specific, use different keywords, or expand scope.\n\n"
-        f"Original query: {query}\n\nRewritten query:"
+        "Rewrite the failed research query for better retrieval recall while preserving intent.\n\n"
+        "Requirements:\n"
+        "- Keep the same user intent.\n"
+        "- Make it atomic and specific.\n"
+        "- Include entity, dimension, and timeframe clues when possible.\n"
+        "- Preserve the same target entities; do not add new companies/entities.\n"
+        "- Add useful business synonyms (for example revenue/sales/topline, risk/exposure).\n"
+        "- Do not broaden into unrelated topics.\n\n"
+        f"Detected target entities: {entity_line}\n"
+        f"Original query: {query}\n\n"
+        "Return only the rewritten query as a single line."
     )
     try:
         response = await llm.ainvoke(prompt)
         rewritten = response.content.strip()
+        if entities:
+            rewritten_entities = set(_detect_entities(rewritten))
+            original_entities = set(entities)
+            # Guardrail: reject rewrites that drop all expected entities.
+            if not (rewritten_entities & original_entities):
+                logger.warning(
+                    "Query rewrite dropped target entities; keeping original query. original=%s rewritten=%s",
+                    sorted(original_entities),
+                    sorted(rewritten_entities),
+                )
+                rewritten = query
         logger.info("Query rewritten: '%.60s'  ->  '%.60s'", query, rewritten)
         new_hyde = await hyde_rewrite(rewritten)
         return rewritten, new_hyde
@@ -797,15 +825,23 @@ async def _self_rag_loop(
     total_tokens = 0
 
     generation_prompt = (
-        f"Using ONLY the following evidence, answer the question. "
-        f"Do not add any information not present in the evidence.\n\n"
-        f"Evidence:\n{evidence_text}\n\nQuestion: {query}\n\nAnswer:"
+        "You are the Researcher answer drafter.\n"
+        "Use only the provided evidence.\n"
+        "Do not introduce facts not grounded in evidence.\n"
+        "If evidence is insufficient, say so explicitly.\n"
+        "Keep the answer concise and factual.\n\n"
+        f"Question: {query}\n\n"
+        f"Evidence:\n{evidence_text}\n\n"
+        "Answer:"
     )
 
     grounding_check_prompt_template = (
-        "Does the following answer contain ONLY information that is directly "
-        "supported by the provided evidence? Answer YES or NO.\n\n"
-        "Evidence:\n{evidence}\n\nAnswer:\n{answer}"
+        "Check grounding quality.\n"
+        "Is every factual statement in the answer directly supported by the evidence?\n"
+        "If any statement is unsupported, respond NO.\n\n"
+        "Evidence:\n{evidence}\n\n"
+        "Answer:\n{answer}\n\n"
+        "Return exactly one token: YES or NO."
     )
 
     answer = ""
@@ -849,6 +885,22 @@ async def _self_rag_loop(
 def _count_source_diversity(chunks: List[EvidenceChunk]) -> int:
     """Count unique doc_id values across the graded chunks (MF-RES-09)."""
     return len({c.doc_id for c in chunks})
+
+
+def _detect_entities(text: str) -> List[str]:
+    q = (text or "").lower()
+    entity_aliases = {
+        "infosys": ["infosys"],
+        "adobe": ["adobe"],
+        "google": ["google", "alphabet", "gcp", "google cloud"],
+        "microsoft": ["microsoft", "azure"],
+        "amazon": ["amazon", "aws"],
+    }
+    found: List[str] = []
+    for entity, aliases in entity_aliases.items():
+        if any(alias in q for alias in aliases):
+            found.append(entity)
+    return found
 
 
 def _build_summary(answer: str) -> str:

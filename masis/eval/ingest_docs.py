@@ -1,7 +1,7 @@
 """
 masis.eval.ingest_docs
 ======================
-Document ingestion pipeline adapted from Engineer 6's reference implementation.
+Document ingestion pipeline for MASIS retrieval.
 
 Ingests documents from the Infosys company docs folder into ChromaDB (vector)
 and builds a BM25 index (sparse), then registers both on the researcher module
@@ -23,9 +23,6 @@ Usage
     python -m masis.eval.ingest_docs                          # default infosys docs
     python -m masis.eval.ingest_docs --doc-folder /path/to/docs --force
 
-Adapted from
-------------
-    rag_pipeline_ready-made_by_engineer6/Insights-Agent-Flow-Research-main/ingestion/
 """
 
 from __future__ import annotations
@@ -111,6 +108,7 @@ def _normalize_persist_dir(persist_dir: str) -> str:
 def _get_or_create_chroma_client(persist_dir: str) -> Any:
     """Return one persistent Chroma client per normalized path."""
     import chromadb
+    from chromadb.api.shared_system_client import SharedSystemClient
 
     global _CHROMA_CLIENT, _CHROMA_CLIENT_PATH
     normalized = _normalize_persist_dir(persist_dir)
@@ -118,23 +116,47 @@ def _get_or_create_chroma_client(persist_dir: str) -> Any:
         return _CHROMA_CLIENT
 
     os.makedirs(normalized, exist_ok=True)
-    _CHROMA_CLIENT = chromadb.PersistentClient(path=normalized)
+    try:
+        _CHROMA_CLIENT = chromadb.PersistentClient(path=normalized)
+    except ValueError as exc:
+        # Streamlit reruns (or mixed client settings in-process) can leave a
+        # cached SharedSystemClient for the same path with different settings.
+        # Recover by clearing Chroma's process-local system cache and retrying.
+        msg = str(exc)
+        if "already exists" in msg and "different settings" in msg:
+            logger.warning(
+                "Chroma client settings collision detected for %s; clearing "
+                "SharedSystemClient cache and retrying once.",
+                normalized,
+            )
+            SharedSystemClient.clear_system_cache()
+            _CHROMA_CLIENT = chromadb.PersistentClient(path=normalized)
+        else:
+            raise
     _CHROMA_CLIENT_PATH = normalized
     return _CHROMA_CLIENT
 
-# Chunking parameters (from engineer 6 config)
+# Chunking parameters
 CHUNK_SIZE_PARENT = 2000
 CHUNK_SIZE_CHILD = 500
 CHUNK_OVERLAP = 50
 LLAMAPARSE_TIER = "agentic"
 
+def _resolve_default_doc_folder() -> str:
+    """Resolve a default Infosys document folder from common local layouts."""
+    project_root = Path(__file__).resolve().parents[2]
+    candidates = [project_root / "infosys_company_docs"]
+    candidates.extend(
+        project_root.glob("rag_pipeline*/Insights-Agent-Flow-Research-main/infosys_company_docs")
+    )
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return str(project_root / "infosys_company_docs")
+
+
 # Default document folder
-DEFAULT_DOC_FOLDER = str(
-    Path(__file__).resolve().parents[2]
-    / "rag_pipeline_ready-made_by_engineer6"
-    / "Insights-Agent-Flow-Research-main"
-    / "infosys_company_docs"
-)
+DEFAULT_DOC_FOLDER = _resolve_default_doc_folder()
 
 CHROMA_COLLECTION_NAME = "masis_eval_infosys"
 PARENT_STORE_FILENAME = "parent_store_infosys.json"
@@ -491,13 +513,19 @@ def _extract_document_metadata(text_first_pages: str) -> Dict[str, Any]:
     try:
         llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
         prompt = (
-            "Analyze this document excerpt and return JSON with these keys:\n"
+            "You are a document metadata extraction assistant.\n"
+            "Infer normalized metadata from the excerpt and return strict JSON only.\n\n"
+            "Required keys:\n"
             '- "document_type": one of "annual_report", "quarterly_report", '
             '"strategy_note", "operational_update", "press_release", "other"\n'
-            '- "year": year as string (e.g. "2025") or ""\n'
-            '- "quarter": quarter as string (e.g. "Q3") or ""\n\n'
+            '- "year": 4-digit year string or ""\n'
+            '- "quarter": one of "Q1","Q2","Q3","Q4" or ""\n\n'
+            "Extraction rules:\n"
+            "- Prefer explicit statements over inference.\n"
+            "- If uncertain, return empty string for year/quarter.\n"
+            "- Keep output machine-parseable; no markdown, no prose.\n\n"
             f"Document excerpt:\n{text_first_pages[:3000]}\n\n"
-            "Return ONLY valid JSON, no markdown fences."
+            "Return ONLY valid JSON."
         )
         response = llm.invoke(prompt)
         content = response.content.strip()
@@ -534,7 +562,7 @@ def _extract_metadata_keywords(text: str) -> Dict[str, Any]:
 
 
 def _detect_section(text: str) -> str:
-    """Detect section from chunk text (from engineer 6's metadata_tagger)."""
+    """Detect section from chunk text."""
     section_keywords = {
         "Financial Performance": ["revenue", "income", "profit", "loss", "earnings", "margin"],
         "Risk Factors": ["risk", "uncertainty", "challenge", "threat", "concern"],
@@ -555,7 +583,7 @@ def _detect_section(text: str) -> str:
 
 
 def _detect_department(text: str) -> str:
-    """Detect department from chunk text (from engineer 6's metadata_tagger)."""
+    """Detect department from chunk text."""
     dept_keywords = {
         "Sales": ["sales", "selling", "revenue generation", "bookings"],
         "Engineering": ["engineering", "development", "r&d", "software"],
@@ -576,7 +604,7 @@ def _detect_department(text: str) -> str:
 
 
 # ===========================================================================
-# Step 3: Hierarchical chunking (from engineer 6)
+# Step 3: Hierarchical chunking
 # ===========================================================================
 
 def _text_split(text: str, chunk_size: int, overlap: int) -> List[str]:
@@ -604,7 +632,7 @@ def _text_split(text: str, chunk_size: int, overlap: int) -> List[str]:
 
 
 def _is_table_content(text: str) -> bool:
-    """Detect markdown tables (from engineer 6)."""
+    """Detect markdown tables."""
     lines = text.strip().split("\n")
     pipe_lines = [line for line in lines if "|" in line]
     separator_lines = [line for line in lines if re.match(r'^[\s|:-]+$', line)]
@@ -612,7 +640,7 @@ def _is_table_content(text: str) -> bool:
 
 
 def _extract_tables(text: str) -> List[Dict[str, Any]]:
-    """Extract table blocks from text (from engineer 6)."""
+    """Extract table blocks from text."""
     table_pattern = re.compile(
         r'((?:\|[^\n]+\|\n)+(?:\|[-:\s|]+\|\n)(?:\|[^\n]+\|\n)*)',
         re.MULTILINE,
@@ -638,7 +666,7 @@ def create_hierarchical_chunks(
     doc_metadata: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Create parent and child chunks with linking (from engineer 6 pipeline).
+    Create parent and child chunks with linking.
 
     Child chunks (~500 chars) are embedded in the vector store.
     Parent chunks (~2000 chars) are stored separately and returned as LLM context.
@@ -740,7 +768,7 @@ def store_in_chromadb(
     collection_name: str,
 ) -> Tuple[Any, Dict[str, int]]:
     """
-    Store chunks in ChromaDB with OpenAI embeddings (from engineer 6).
+    Store chunks in ChromaDB with OpenAI embeddings.
 
     Returns (collection, stats_dict).
     """

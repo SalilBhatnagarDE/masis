@@ -1,67 +1,62 @@
-# Slide 2: Low-Level Design -- "The Engineering Under the Hood"
+# Low-Level Design
 
-> **Pillar:** Low-Level Design (LLD)
-> **Time Allocation:** 5-6 minutes
-> **Curveball Addressed:** "How do you handle 50 retrieved chunks without lost-in-the-middle?" / "Show me the state schema" / "How do parallel agents write to shared state safely?"
+This document covers the internal data structures, state schema, agent dispatch flow, and routing logic that make MASIS work.
 
 ---
 
-## MASISState: The Central TypedDict
+## MASISState: The Shared Whiteboard
 
-Every piece of data flows through a single `MASISState` TypedDict. LangGraph nodes return partial dicts -- only the keys they modify. The `evidence_board` field uses a custom **deduplication reducer** for safe parallel writes.
+Everything flows through a single `MASISState` TypedDict. LangGraph nodes return partial dicts — only the keys they modify. Agents don't talk to each other directly; they read from and write to this shared state.
 
 ```python
-# File: masis/schemas/models.py (lines 871-949)
+# masis/schemas/models.py
 
 class MASISState(TypedDict, total=False):
-    # -- Immutable query identity --
-    original_query: str                              # MF-MEM-02: NEVER modified
+    # Immutable query identity
+    original_query: str                              # NEVER modified after first turn
     query_id: str                                    # UUID for checkpoint + tracing
 
-    # -- Supervisor-owned --
-    task_dag: List[TaskNode]                          # Dynamic DAG (MF-MEM-05)
+    # Supervisor-owned
+    task_dag: List[TaskNode]                          # Dynamic DAG
     stop_condition: str                              # When is the query "done"?
-    iteration_count: int                             # Global counter (MF-MEM-03)
+    iteration_count: int                             # Global counter
     next_tasks: List[TaskNode]                       # Tasks to dispatch next
     supervisor_decision: str                         # Routing output for edges
     last_task_result: Optional[AgentOutput]           # Most recent agent output
 
-    # -- Evidence whiteboard (parallel-safe) --
-    evidence_board: Annotated[List[EvidenceChunk],    # MF-MEM-01: dedup reducer
-                              evidence_reducer]
+    # Evidence whiteboard (parallel-safe via custom reducer)
+    evidence_board: Annotated[List[EvidenceChunk], evidence_reducer]
 
-    # -- Agent results --
+    # Agent results
     critique_notes: Optional[SkepticOutput]           # Skeptic findings
     synthesis_output: Optional[SynthesizerOutput]     # Final answer
 
-    # -- Quality & validation --
-    quality_scores: Dict[str, float]                  # MF-VAL-06
-    validation_round: int                            # Capped at 3 (MF-VAL-07)
+    # Quality & validation
+    quality_scores: Dict[str, float]
+    validation_round: int                            # Capped at 2
 
-    # -- Budget & safety --
-    token_budget: BudgetTracker                      # 100K tokens / $0.50 / 300s
+    # Budget & safety
+    token_budget: BudgetTracker                      # 200K tokens / $0.50 / 300s
     api_call_counts: Dict[str, int]                  # Per-agent rate limiting
 
-    # -- Audit --
+    # Audit
     decision_log: List[Dict[str, Any]]               # Every Supervisor decision
 ```
 
-> **Codebase Reference:** `C:\Users\salil\final_maiss\masis\schemas\models.py` -- `MASISState` class (lines 871-949)
-
 ---
 
-## Evidence Deduplication Reducer (MF-MEM-01)
+## Evidence Deduplication Reducer
 
-When two parallel Researcher agents retrieve the same chunk, the reducer keeps only the copy with the **highest retrieval score**. This is registered via Python's `Annotated` type.
+When two parallel Researchers retrieve the same chunk, the reducer keeps only the copy with the highest retrieval score. This is registered via Python's `Annotated` type — LangGraph calls it automatically on every state update.
 
 ```python
-# File: masis/schemas/models.py (lines 822-864)
+# masis/schemas/models.py
 
 def evidence_reducer(
     existing: List[EvidenceChunk],
     new: List[EvidenceChunk],
 ) -> List[EvidenceChunk]:
-    """Dedup by composite key (doc_id, chunk_id). Keep highest score."""
+    """Dedup by (doc_id, chunk_id). Keep highest score."""
     index: Dict[tuple, EvidenceChunk] = {}
     for chunk in existing:
         key = (chunk.doc_id, chunk.chunk_id)
@@ -74,23 +69,23 @@ def evidence_reducer(
 
 # Usage in state:
 evidence_board: Annotated[List[EvidenceChunk], evidence_reducer]
-# LangGraph calls reducer automatically:
-#   return {"evidence_board": result.evidence}  # reducer merges, not replaces
+# Agents just return: {"evidence_board": result.evidence}
+# The reducer merges — it does NOT replace.
 ```
 
-**Result:** State grows linearly with unique evidence, NOT with task count.
+State grows linearly with unique evidence, not with task count. No locks needed.
 
 ---
 
-## Supervisor 3-Mode Decision Tree
+## Execution Flow (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant SUP as Supervisor<br/>(3 Modes)
-    participant EXE as Executor<br/>(dispatch_agent)
-    participant VAL as Validator<br/>(Quality Gates)
-    participant STATE as MASISState<br/>(Shared Whiteboard)
+    participant SUP as Supervisor
+    participant EXE as Executor
+    participant VAL as Validator
+    participant STATE as MASISState
 
     U->>SUP: Raw Query
     Note over SUP: MODE 1: PLAN (gpt-4.1)
@@ -117,7 +112,7 @@ sequenceDiagram
     EXE->>STATE: T4: Read evidence + critique, Write synthesis_output
     EXE->>SUP: last_task_result
 
-    Note over SUP: All done -> ready_for_validation
+    Note over SUP: All done → ready_for_validation
     SUP->>VAL: Route to Validator
 
     VAL->>STATE: Read synthesis, evidence
@@ -134,19 +129,19 @@ sequenceDiagram
 
 ---
 
-## Filtered State Views Per Agent (MF-MEM-07)
+## Filtered State Views Per Agent
 
-Each agent sees only what it needs. The Supervisor NEVER sees full evidence chunks.
+Each agent sees only what it needs. The Supervisor never sees full evidence chunks.
 
 | Agent | Sees | Does NOT See |
-|-------|------|-------------|
-| **Supervisor** | `original_query`, `task_dag` (statuses), `last_task_result.summary` (500 chars max), `token_budget`, `iteration_count` | Full evidence_board, critique_notes, synthesis_output |
-| **Researcher** | `task.query` (its own sub-question only) | Other researchers' evidence, task_dag, budget |
-| **Skeptic** | All `evidence_board` chunks (needs cross-doc analysis), `task_dag` | Budget, iteration_count, other agent summaries |
+|---|---|---|
+| **Supervisor** | `original_query`, `task_dag` (statuses), `last_task_result.summary` (500 chars max), `token_budget`, `iteration_count` | Full `evidence_board`, `critique_notes`, `synthesis_output` |
+| **Researcher** | `task.query` (its own sub-question only) | Other researchers' evidence, `task_dag`, budget |
+| **Skeptic** | All `evidence_board` chunks (needs cross-doc analysis), `task_dag` | Budget, `iteration_count`, other agent summaries |
 | **Synthesizer** | `evidence_board` (U-shape ordered), `critique_notes`, `task_dag` | Budget, raw retrieval scores |
-| **Validator** | `synthesis_output`, `evidence_board`, `original_query`, `task_dag` | Budget, decision_log |
+| **Validator** | `synthesis_output`, `evidence_board`, `original_query`, `task_dag` | Budget, `decision_log` |
 
-> **Why this matters:** Prevents context bloat. The Supervisor makes decisions from 500-char summaries, not 100,000 chars of raw evidence.
+The Supervisor makes routing decisions from 500-char summaries, not 100,000 chars of raw evidence. This keeps its context window small and its decisions fast.
 
 ---
 
@@ -235,19 +230,11 @@ classDiagram
     class BudgetTracker {
         +int total_tokens_used
         +float total_cost_usd
-        +int remaining [default=100000]
+        +int remaining [default=200000]
         +Dict api_calls
         +float start_time
         +bool is_exhausted()
         +BudgetTracker add(tokens, cost)
-    }
-
-    class SupervisorDecision {
-        +Literal action
-        +str reason
-        +RetrySpec retry_spec
-        +ModifyDagSpec modify_dag_spec
-        +EscalateSpec escalate_spec
     }
 
     MASISState --> TaskNode
@@ -264,10 +251,12 @@ classDiagram
 
 ---
 
-## DAG Routing Logic (Conditional Edges)
+## Routing Logic
+
+Routing is pure Python — reads one string field, returns next node name. No LLM involved.
 
 ```python
-# File: masis/graph/edges.py (lines 70-129)
+# masis/graph/edges.py
 
 def route_supervisor(state: MASISState) -> str:
     decision = state.get("supervisor_decision", "failed")
@@ -275,58 +264,50 @@ def route_supervisor(state: MASISState) -> str:
     if decision == "continue":             return "executor"
     if decision == "ready_for_validation": return "validator"
     if decision == "force_synthesize":     return "executor"  # executor checks flag
-    if decision == "hitl_pause":           return END         # graph paused
+    if decision == "hitl_pause":           return END
     if decision == "failed":               return END
-    return END  # safe fallback
+    return END
 
 def route_validator(state: MASISState) -> str:
     if state.get("validation_pass", False): return END
-    return "supervisor"  # at least one threshold missed
+    return "supervisor"
 ```
 
-**Routing Map (from workflow.py):**
-
-| Decision | Next Node | Trigger |
-|----------|-----------|---------|
+| Decision | Next Node | When |
+|---|---|---|
 | `"continue"` | Executor | Normal task dispatch |
-| `"ready_for_validation"` | Validator | All DAG tasks done |
+| `"ready_for_validation"` | Validator | All DAG tasks complete |
 | `"force_synthesize"` | Executor | Budget/time/repetition cap hit |
-| `"hitl_pause"` | END | interrupt() called for human input |
-| `"failed"` | END | Unrecoverable error or cancel |
+| `"hitl_pause"` | END | Human review needed |
+| `"failed"` | END | Unrecoverable error |
 | Validator `pass` | END | All quality gates met |
 | Validator `revise` | Supervisor | At least one threshold missed |
 
-> **Codebase Reference:** `C:\Users\salil\final_maiss\masis\graph\edges.py` and `C:\Users\salil\final_maiss\masis\graph\workflow.py`
-
 ---
 
-## Tool / Capability Exposure Matrix
+## Tool Exposure Per Agent
 
 | Capability | Supervisor | Researcher | Skeptic | Synthesizer | Validator |
-|-----------|:----------:|:----------:|:-------:|:-----------:|:---------:|
-| gpt-4.1 (planning, decisions) | Yes | -- | -- | Yes | -- |
-| gpt-4.1-mini (retrieval, grading) | -- | Yes | -- | -- | -- |
-| o3-mini (adversarial judge) | -- | -- | Yes | -- | -- |
-| ChromaDB vector search | -- | Yes | -- | -- | -- |
-| BM25 keyword search | -- | Yes | -- | -- | -- |
-| Cross-encoder reranking | -- | Yes | -- | -- | -- |
-| BART-MNLI (NLI pre-filter) | -- | -- | Yes | Yes (post-hoc) | Yes |
-| Web Search (Tavily) | -- | Yes (via task type) | -- | -- | -- |
-| interrupt() (HITL) | Yes | -- | -- | -- | -- |
-| Pydantic structured output | Yes | Yes | Yes | Yes | -- |
+|---|:---:|:---:|:---:|:---:|:---:|
+| gpt-4.1 | Yes | — | — | Yes | — |
+| gpt-4.1-mini | — | Yes | — | — | — |
+| o3-mini | — | — | Yes | — | — |
+| ChromaDB vector search | — | Yes | — | — | — |
+| BM25 keyword search | — | Yes | — | — | — |
+| Cross-encoder reranking | — | Yes | — | — | — |
+| BART-MNLI (NLI) | — | — | Yes | Yes (post-hoc) | Yes |
+| Tavily web search | — | Yes (via task type) | — | — | — |
+| `interrupt()` (HITL) | Yes | — | — | — | — |
+| Pydantic structured output | Yes | Yes | Yes | Yes | — |
 
 ---
 
-## Presenter Talking Points
+## Relevant Code
 
-1. "The MASISState TypedDict is the shared whiteboard. All agent communication happens through state -- agents never talk directly to each other."
-
-2. "The evidence_board uses a custom Annotated reducer that deduplicates by (doc_id, chunk_id) and keeps the highest-scoring copy. This makes parallel writes safe without locks."
-
-3. "Each agent sees a filtered view of state. The Supervisor only sees 500-character summaries, never full evidence chunks. This prevents context window bloat even with 50+ chunks."
-
-4. "The routing logic is pure Python -- route_supervisor reads one string field and returns the next node name. No LLM involved in routing decisions."
-
----
-
-> **Wow Statement:** "Every architectural decision here serves one goal: the Supervisor should be able to make a routing decision in under 10 milliseconds for zero dollars, 60-70% of the time. The Slow Path exists for the other 30%."
+| Component | File |
+|---|---|
+| State schema | `masis/schemas/models.py` |
+| Graph wiring | `masis/graph/workflow.py` |
+| Routing edges | `masis/graph/edges.py` |
+| Supervisor modes | `masis/nodes/supervisor.py` |
+| Evidence reducer | `masis/schemas/models.py` — `evidence_reducer()` |

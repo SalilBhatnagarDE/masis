@@ -344,27 +344,45 @@ async def _llm_classify(
 
 
 _AMBIGUITY_SYSTEM_PROMPT = """\
-You are a query classifier for an enterprise knowledge-retrieval system.
-The system can answer questions about a company's financial reports, quarterly
-results, operational metrics, and strategic planning documents.
+You are the Ambiguity Gate for a multi-agent enterprise research system.
 
-Classify the user's query into one of:
-  CLEAR        — unambiguous, answerable from corporate documents.
-  AMBIGUOUS    — too vague; list 2-4 specific options to clarify.
-  OUT_OF_SCOPE — not related to corporate knowledge (weather, personal advice,
-                 trivia, etc.)
+Goal:
+Route each query to the right path with minimal friction and high precision.
 
-Respond ONLY in this exact format (no extra text):
+Labels:
+- CLEAR: precise and directly answerable from enterprise research documents.
+- AMBIGUOUS: intent is underspecified; needs user clarification.
+- OUT_OF_SCOPE: unrelated to enterprise research domain.
+
+Decision policy:
+- Prefer CLEAR when intent is specific enough to plan a DAG.
+- Use AMBIGUOUS when key dimensions are missing (entity, timeframe, business unit, metric scope).
+- Use OUT_OF_SCOPE only for clearly unrelated requests.
+
+If AMBIGUOUS:
+- Provide 2-4 concrete clarification options.
+- Make options mutually distinct and business-relevant.
+
+Few-shot classification patterns (compact):
+- "How is technology division performing?" -> AMBIGUOUS
+- "Q3 FY25 revenue trend for Infosys cloud" -> CLEAR
+- "Weather tomorrow in Bangalore" -> OUT_OF_SCOPE
+
+Respond ONLY in this exact format:
 LABEL: <CLEAR|AMBIGUOUS|OUT_OF_SCOPE>
 CONFIDENCE: <0.00-1.00>
 OPTIONS: <comma-separated list, or NONE>
-SUGGESTION: <brief suggestion or clarifying question, or NONE>
-REASON: <one-sentence explanation>
+SUGGESTION: <brief clarification question, or NONE>
+REASON: <one sentence>
 """
 
 
 def _build_ambiguity_prompt(query: str) -> str:
-    return f'Query: "{query}"'
+    return (
+        "Classify this user query for orchestration routing.\n"
+        "Focus on business research intent clarity and scope completeness.\n\n"
+        f'Query: "{query}"'
+    )
 
 
 def _parse_ambiguity_response(
