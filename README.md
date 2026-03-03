@@ -135,6 +135,27 @@ Takes the verified evidence plus the Skeptic's critique notes and writes the fin
 ### Validator
 Final quality gate. Scores the answer on four metrics: faithfulness, citation accuracy, answer relevancy, DAG completeness. If anything falls below threshold, routes back to the Supervisor. Capped at 2 rounds to avoid infinite loops.
 
+### What Each Returns
+All task agents return a normalized `AgentOutput` to Supervisor via Executor:
+
+| Agent | Main typed payload (`raw_output`) | Fast Path `criteria_result` used by Supervisor |
+|---|---|---|
+| Researcher | `ResearcherOutput` (`evidence`, summary, retrieval stats) | `chunks_after_grading`, `grading_pass_rate`, `self_rag_verdict`, `source_diversity`, `crag_retries_used` |
+| Skeptic | `SkepticOutput` (claim checks, gaps, reconciliations, confidence) | `claims_unsupported`, `claims_contradicted`, `logical_gaps_count`, `overall_confidence` |
+| Synthesizer | `SynthesizerOutput` (final answer + citations) | `citations_count`, `claims_count`, `all_citations_in_evidence_board` |
+| Validator | Validator state update (not `AgentOutput`) | `quality_scores` + `validation_pass` |
+
+### How Supervisor Decides: Continue vs Slow Mode
+1. Fast safety checks run first (no LLM): budget, iteration cap, wall-clock cap, repetition.
+2. If safe, Supervisor checks `criteria_result` for completed task(s):
+Researcher PASS: `chunks_after_grading >= 2`, `grading_pass_rate >= 0.30`, `self_rag_verdict in {"grounded","partial"}`.
+Skeptic PASS: `claims_unsupported <= 2`, `claims_contradicted == 0`, `logical_gaps_count <= 3`, `overall_confidence >= 0.65`.
+Synthesizer PASS: `citations_count >= 1` and `all_citations_in_evidence_board == true`.
+3. If PASS, Supervisor marks task `done` and returns `supervisor_decision="continue"` with next ready tasks.
+4. If FAIL (or task status is `failed` / `timeout` / `rate_limited`), Supervisor enters Slow Path (`supervisor_slow_path`).
+5. Slow Path actions are one of: `retry`, `modify_dag`, `escalate`, `force_synthesize`, `stop`.
+6. When all tasks are terminal and synthesis exists, Supervisor returns `ready_for_validation`.
+
 ---
 
 ## Filtered State Views Per Agent
