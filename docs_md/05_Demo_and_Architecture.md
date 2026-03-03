@@ -284,6 +284,126 @@ flowchart TB
 
 ---
 
+## Reasoning Scenarios (S1-S10)
+
+This section preserves the full scenario coverage that was previously in the legacy simulation document.
+
+| Scenario | What It Proves |
+|---|---|
+| S1 | Fast Path routing |
+| S2 | Parallel execution + task failure + DAG modification |
+| S3 | Contradiction reconciliation (NLI + LLM judge) |
+| S4 | Ambiguity handling with HITL clarify/resume |
+| S5 | Mid-run evidence gap with HITL choice |
+| S6 | Infinite loop prevention with 3 safety layers |
+| S7 | Circuit breaker + model fallback |
+| S8 | Validator loop-back and correction |
+| S9 | User edits DAG before execution |
+| S10 | Budget exhaustion and graceful degradation |
+
+### S1: Simple Factual Query
+
+This is already covered in the **Demo Run: Q1 - Revenue Trend** section above.
+
+### S2: Multi-Step Failure and DAG Modification
+
+1. Supervisor plans parallel tasks: internal research + competitor research.
+2. Internal task passes, competitor task fails criteria (low pass rate).
+3. Slow Path updates the DAG and adds `web_search` for missing competitor data.
+4. Web results are merged into evidence.
+5. Skeptic reconciles differences and Synthesizer answers with mixed internal + web citations.
+
+Result: the run still succeeds without forcing a restart.
+
+### S3: Contradictory Evidence
+
+1. Researcher retrieves claims that look conflicting.
+2. Skeptic Stage 1 (NLI) flags contradiction.
+3. Skeptic Stage 2 (LLM judge) explains the claims describe different dimensions.
+4. Supervisor accepts reconciliation and proceeds.
+5. Synthesizer presents both sides with explicit citations.
+
+Result: no false consensus, no hidden conflict.
+
+### S4: Ambiguous Query
+
+1. Ambiguity detector classifies query as ambiguous (`score >= 0.70`).
+2. Workflow pauses with `interrupt()` and asks user to pick scope.
+3. User resumes with a clarified option.
+4. Supervisor replans with the clarified query and runs normal flow.
+
+Result: avoids wasted research and wrong-answer drift.
+
+### S5: Evidence Insufficient Mid-Execution
+
+1. Supervisor plans 5 parallel research dimensions.
+2. Only part of requested dimensions is found in internal data.
+3. Slow Path adds web tasks for missing dimensions.
+4. One key dimension remains unavailable after web search.
+5. HITL pause asks user whether to accept partial, upload data, change scope, or cancel.
+6. User selects `accept_partial`; workflow continues with disclaimer.
+
+Result: system stays transparent when coverage is incomplete.
+
+### S6: Infinite Loop Prevention
+
+1. Researcher retries and still finds no supporting evidence.
+2. Supervisor adds web search fallback.
+3. Repetition detector finds high semantic similarity (`cosine > 0.90`).
+4. Supervisor emits `force_synthesize` instead of repeating the same search.
+5. Synthesizer returns a bounded "no evidence found" answer.
+
+Result: no runaway loops, honest output.
+
+### S7: Circuit Breaker and Model Fallback
+
+1. Researcher model returns repeated API errors.
+2. Circuit breaker moves from CLOSED to OPEN after threshold failures.
+3. Fallback model is used automatically.
+4. Query completes normally.
+5. After cooldown, HALF_OPEN probe succeeds and breaker returns to CLOSED.
+
+Result: resilience without user-visible failure.
+
+### S8: Validator Loop-Back
+
+1. First synthesis fails one or more quality metrics.
+2. Validator routes back to Supervisor with `quality_scores`.
+3. Slow Path adds targeted re-research task(s).
+4. Synthesizer regenerates answer using corrected evidence.
+5. Validator round 2 passes.
+
+Result: self-correction loop works as designed.
+
+### S9: Full DAG With User Editing
+
+1. Supervisor plans DAG and pauses at DAG approval.
+2. User modifies planned tasks (add/update query scope).
+3. Workflow resumes with edited DAG.
+4. Executor runs updated parallel tasks.
+5. Normal skeptic, synthesis, and validation stages complete.
+
+Result: user can steer execution without breaking graph integrity.
+
+### S10: Budget Exhaustion and Graceful Degradation
+
+1. Complex query consumes most of the token budget.
+2. Fast Path sees remaining budget is below safe completion threshold.
+3. Supervisor emits `force_synthesize`.
+4. Synthesis runs in partial mode with missing-dimension disclaimer.
+5. Validator checks and returns bounded final output.
+
+Result: the system returns the best possible answer inside budget constraints.
+
+### Scenario Artifact Pointers
+
+- `masis/eval/results/scenario_tests_report.json`
+- `masis/eval/results/s1_revenue_trend.json`
+- `masis/eval/results/s2_underperforming_depts.json`
+- `masis/eval/results/s3_key_risks.json`
+
+---
+
 ## API Endpoints
 
 All implemented in `masis/api/main.py`.

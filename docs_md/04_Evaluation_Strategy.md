@@ -146,6 +146,25 @@ def is_exhausted(self) -> bool:
 | Skeptic | 1 | 3 | 45s |
 | Synthesizer | 1 | 3 | 60s |
 
+### Queueing Behavior When Limits Are Hit
+
+Fast Path enforces limits before dispatch. Extra tasks are queued, not dropped.
+
+```python
+TOOL_LIMITS = {
+    "researcher":  {"max_parallel": 3, "max_total": 8, "timeout_s": 30},
+    "web_search":  {"max_parallel": 2, "max_total": 4, "timeout_s": 15},
+    "skeptic":     {"max_parallel": 1, "max_total": 3, "timeout_s": 45},
+    "synthesizer": {"max_parallel": 1, "max_total": 3, "timeout_s": 60},
+}
+
+# Example: 5 researcher tasks become 3 now + 2 queued
+next_tasks = [T1, T2, T3]
+queued = [T4, T5]
+```
+
+This prevents API spikes and keeps the run stable.
+
 ---
 
 ## 3-Layer Loop Prevention
@@ -210,13 +229,66 @@ Same query → same retrieval → same reranking → similar LLM output. Not 100
 
 ---
 
+## Actual Output Snapshot
+
+These are real values from recent run artifacts:
+- `masis/eval/results/infosys_q1_result.json`
+- `masis/eval/results/infosys_q2_result.json`
+- `masis/eval/results/infosys_q3_result.json`
+
+```json
+[
+  {
+    "scenario": "Q1",
+    "latency_s": 190.94,
+    "iteration_count": 6,
+    "validation_round": 1,
+    "supervisor_decision": "ready_for_validation",
+    "evidence_count": 10
+  },
+  {
+    "scenario": "Q2",
+    "latency_s": 318.53,
+    "iteration_count": 7,
+    "validation_round": 1,
+    "supervisor_decision": "ready_for_validation",
+    "evidence_count": 7
+  },
+  {
+    "scenario": "Q3",
+    "latency_s": 193.14,
+    "iteration_count": 5,
+    "validation_round": 1,
+    "supervisor_decision": "ready_for_validation",
+    "evidence_count": 5
+  }
+]
+```
+
+Q2 is a practical reminder that watchdog timeout and retry limits are required for demo stability.
+
+---
+
+## Cascading Failure Handling
+
+Subtask failures do not crash the run. They return to Supervisor Slow Path, which chooses the next safe action.
+
+```text
+T1 (researcher): pass_rate=0.05 -> Slow Path -> retry with rewritten query
+T1_retry: pass_rate=0.08 -> Slow Path -> switch to web_search
+T1b (web_search): timeout -> Slow Path -> force_synthesize with partial evidence
+```
+
+Worst case, the system returns a partial but honest answer with clear disclaimers.
+
+---
 ## Test Coverage
 
 | Level | What | Count |
 |---|---|:---:|
 | Unit | `evidence_reducer`, `is_ready()`, `check_agent_criteria()`, `_extract_metadata()` | 50+ |
 | Integration | Agent pipelines: researcher E2E, skeptic NLI+LLM, synthesizer with Pydantic | 20+ |
-| E2E (Scenario) | Full graph traces: Scenarios S1–S10 from `docs_md/reasoning_simulation.md` | 10 |
+| E2E (Scenario) | Full graph traces: Scenarios S1-S10 from `docs_md/05_Demo_and_Architecture.md` | 10 |
 | Golden Dataset | Curated queries spanning all query types | 50+ |
 
 ### Golden Dataset Categories
@@ -233,6 +305,22 @@ Same query → same retrieval → same reranking → similar LLM output. Not 100
 
 ---
 
+## Scenario Coverage Map
+
+| Scenario | Main Behavior Tested |
+|---|---|
+| S1 | Fast Path |
+| S2 | Parallel execution + DAG modification |
+| S3 | Contradiction reconciliation (NLI + LLM judge) |
+| S4 | Ambiguity interrupt and resume |
+| S5 | Mid-run evidence gap and HITL decision |
+| S6 | Loop prevention (CRAG + cosine + hard cap) |
+| S7 | Circuit breaker and model fallback |
+| S8 | Validator loop-back and self-correction |
+| S9 | User-edited DAG via resume command |
+| S10 | Budget exhaustion and graceful degradation |
+
+---
 ## Quality Metrics Summary
 
 | Query | Evidence | Faithfulness | Citation Accuracy | Relevancy | DAG Complete | Pass? |
@@ -244,3 +332,4 @@ Same query → same retrieval → same reranking → similar LLM output. Not 100
 | DEMO query | 4 chunks | 0.92 | 0.94 | 0.97 | 1.00 | Yes |
 
 Relevant files: `masis/schemas/thresholds.py`, `masis/nodes/validator.py`
+

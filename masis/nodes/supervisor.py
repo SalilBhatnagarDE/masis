@@ -1,18 +1,18 @@
 """
 masis.nodes.supervisor
 ======================
-Supervisor node  --  the "brain" of the MAISS system (ENG-04, MF-SUP-01 through MF-SUP-17).
+The Supervisor is the brain of MASIS. It plans the task DAG, monitors each result,
+and decides what to do next.
 
-The Supervisor operates in three modes:
-    MODE 1  --  PLAN   (iteration_count == 0): gpt-4.1 decomposes query into DAG via
-                     with_structured_output(TaskPlan). Always Slow Path.
-    MODE 2  --  FAST   (rule-based, $0, <10ms): Checks budgets, iteration limits,
-                     repetition, and per-task acceptance criteria.
-    MODE 3  --  SLOW   (gpt-4.1, ~$0.015): Only when Fast Path criteria FAIL. Decides
-                     retry / modify_dag / escalate / force_synthesize / stop.
+It runs in three modes:
+    MODE 1  --  PLAN   (first turn only): gpt-4.1 breaks the query into a typed task DAG.
+    MODE 2  --  FAST   (runs every turn, free, <10ms): checks budget, iteration cap,
+                       repetition, and per-task pass/fail criteria.
+    MODE 3  --  SLOW   (only when Fast Path can't decide): gpt-4.1 decides whether to
+                       retry, modify the DAG, escalate to a human, force-synthesize, or stop.
 
-Every decision is logged to state["decision_log"] (MF-SUP-17).
-Context sent to the LLM is filtered to summaries only  --  never full evidence (MF-SUP-14).
+Every routing decision is logged to state["decision_log"].
+The LLM only sees compact summaries -- never the full evidence board.
 
 Public API
 ----------

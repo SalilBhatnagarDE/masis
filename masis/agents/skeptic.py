@@ -1,25 +1,26 @@
 """
 masis.agents.skeptic
 ====================
-Skeptic agent — adversarial fact-checker (ENG-08, MF-SKE-01 through MF-SKE-09).
+The Skeptic reads all collected evidence and looks for problems — contradictions,
+unsupported claims, and logical gaps — before the Synthesizer writes the final answer.
 
 Two-stage pipeline
 ------------------
-Stage 1 — NLI pre-filter (BART-MNLI, local, free, <100ms per claim)  (MF-SKE-02/03/04)
-    • Extract discrete claims from evidence chunks (MF-SKE-01)
-    • Run zero-shot entailment on each claim vs. its source text
-    • Flag contradictions (score > 0.80) and unsupported claims (neutral, score > 0.70)
-    • Detect single-source claims (MF-SKE-06)
-    • Detect forward-looking statements (MF-SKE-07)
+Stage 1 — NLI pre-filter (BART-MNLI, local, free, <100ms per claim)
+    • Extracts discrete claims from evidence chunks
+    • Runs zero-shot entailment on each claim vs. its source text
+    • Flags contradictions (score > 0.80) and unsupported claims (neutral, score > 0.70)
+    • Detects claims backed by only one source
+    • Detects forward-looking statements that aren't grounded in data
 
-Stage 2 — LLM judge — o3-mini, adversarial (MF-SKE-05)
-    • Deep critique with NLI flags as context
-    • Enforces ≥ 3 issues found (anti-sycophancy)
-    • Attempts reconciliation of contradictions (MF-SKE-09)
-    • Produces overall confidence score (MF-SKE-08)
+Stage 2 — LLM judge (o3-mini, adversarial)
+    • Deep critique using the NLI flags as context
+    • Forced to find at least 3 issues (prevents sycophantic "looks fine" responses)
+    • Attempts to reconcile contradictions where possible
+    • Outputs an overall confidence score
 
-Anti-sycophancy: Skeptic deliberately uses a different model family (o3-mini)
-from the Synthesizer (gpt-4.1) so the critic does not "agree" with the generator.
+Anti-sycophancy: the Skeptic uses o3-mini, a different model family from the Synthesizer
+(gpt-4.1). This prevents the critic from simply agreeing with whatever the generator said.
 
 Public API
 ----------

@@ -210,3 +210,183 @@ stateDiagram-v2
 | Total query cost (typical) | ~$0.25+ | ~$0.04–0.10 |
 
 60–70% of Supervisor turns use Fast Path — free, rule-based, <10ms. Slow Path fires only when a task fails criteria. This cuts per-query cost by 60–70% compared to naive multi-agent approaches.
+
+---
+
+## Skeptic Prompt Design
+
+The Skeptic's job is adversarial. Its prompt enforces this. The 3-issue minimum means it cannot rubber-stamp evidence even when things look clean.
+
+```python
+SKEPTIC_PROMPT = """You are a research auditor. Your job is to CHALLENGE evidence.
+
+RULES:
+1. You MUST identify at least 3 potential issues (even minor ones)
+2. Flag any claim that relies on a single source
+3. Flag any forward-looking statement used as fact
+4. Flag any claim where the source is older than 2 years
+5. Flag any logical leap between evidence and conclusion
+
+For each issue, classify:
+  - CRITICAL: contradicts source evidence
+  - WARNING: weak evidence, single-source, or outdated
+  - INFO: minor concern, acceptable with disclaimer
+"""
+```
+
+Example — single-source weakness detection:
+```
+Evidence: Only chunk_12 mentions "12% growth"
+Skeptic: WARNING — "12% growth claim relies on single source (Annual Report p.42).
+         No corroboration from quarterly reports or press releases."
+```
+
+---
+
+## Model Swap Guide
+
+All model assignments live in one place and are overridable via environment variables.
+
+```python
+MODEL_ROUTING = {
+    "supervisor_plan":    os.getenv("MODEL_SUPERVISOR", "gpt-4.1"),
+    "supervisor_slow":    os.getenv("MODEL_SUPERVISOR", "gpt-4.1"),
+    "researcher":         os.getenv("MODEL_RESEARCHER", "gpt-4.1-mini"),
+    "skeptic_llm":        os.getenv("MODEL_SKEPTIC", "o3-mini"),
+    "synthesizer":        os.getenv("MODEL_SYNTHESIZER", "gpt-4.1"),
+    "ambiguity_detector": os.getenv("MODEL_AMBIGUITY", "gpt-4.1-mini"),
+}
+
+# Swap via .env:
+# MODEL_RESEARCHER=gpt-4.1-nano
+# MODEL_AMBIGUITY=gpt-4.1-nano
+
+# Or per-query at runtime:
+result = graph.invoke(
+    {"original_query": "...", "model_overrides": {"researcher": "gpt-4.1-nano"}},
+    config
+)
+```
+
+| Role | Safe to swap? | Risk if downgraded |
+|---|:---:|---|
+| Researcher | Yes → gpt-4.1-mini → gpt-4.1-nano | Lower grading quality, more CRAG retries |
+| Ambiguity Detector | Yes | Slightly more false positives |
+| Skeptic LLM | Careful | Cheaper models miss subtle contradictions |
+| Supervisor | Not recommended | Bad DAG plans cascade everywhere |
+| Synthesizer | Not recommended | User-facing answer quality drops |
+
+---
+
+## RAG Pipeline Constants
+
+Key numeric config values for the Researcher pipeline:
+
+```python
+TOP_K_RETRIEVAL = 10      # chunks retrieved by vector + BM25 each
+RERANK_TOP_N = 5          # chunks kept after cross-encoder rerank
+MAX_DOC_GRADING_RETRIES = 1   # CRAG retries inside pipeline
+MAX_HALLUCINATION_RETRIES = 1  # Self-RAG retries
+
+CHUNK_SIZE_PARENT = 2000  # chars — full context window for LLM
+CHUNK_SIZE_CHILD = 500    # chars — search window for retrieval
+CHUNK_OVERLAP = 50        # chars
+
+RRF_K = 60                # Reciprocal Rank Fusion constant
+BM25_WEIGHT = 0.3
+VECTOR_WEIGHT = 0.7
+
+EMBEDDING_MODEL = "text-embedding-3-small"
+RERANKER_MODEL  = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+```
+
+Parent-child chunking means: child chunks (500 chars) are searched for precision, then their parent chunks (2000 chars) are retrieved to give the LLM full context. You get the best of both worlds — narrow search + wide reading window.
+
+---
+
+## Ambiguity Detector
+
+Pre-Supervisor gate. Classifies the query before any DAG planning or agent work.
+
+```python
+class AmbiguityClassification(BaseModel):
+    category: Literal["CLEAR", "AMBIGUOUS", "OUT_OF_SCOPE"]
+    score: float
+    clarification_options: Optional[list[str]] = None
+
+async def ambiguity_detector(state: MASISState) -> dict:
+    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.1)
+    result = await llm.with_structured_output(AmbiguityClassification).ainvoke([
+        SystemMessage(content=AMBIGUITY_PROMPT),
+        HumanMessage(content=state["original_query"]),
+    ])
+
+    if result.category == "CLEAR":
+        return {}  # pass through to Supervisor
+
+    elif result.category == "OUT_OF_SCOPE":
+        return {"supervisor_decision": "failed", "reason": "out_of_scope"}
+
+    else:  # AMBIGUOUS
+        interrupt({
+            "type": "ambiguous_query",
+            "score": result.score,
+            "options": result.clarification_options,
+        })
+```
+
+Three query types handled:
+```
+"What was Q3 revenue?"           → CLEAR (0.12)    → proceed to Supervisor
+"How is the tech division?"      → AMBIGUOUS (0.84) → interrupt for clarification
+"What's the weather in Mumbai?"  → OUT_OF_SCOPE (0.95) → reject, $0 cost
+```
+
+---
+
+## Circuit Breaker Implementation
+
+```python
+class BreakerState(Enum):
+    CLOSED   = "closed"     # Normal operation
+    OPEN     = "open"       # Failing — use fallback
+    HALF_OPEN = "half_open" # Probing — try one call
+
+class CircuitBreaker:
+    def __init__(self, failure_threshold=4, recovery_timeout=60):
+        self.state = BreakerState.CLOSED
+        self.failure_count = 0
+        self.last_failure_time = 0
+
+    async def call(self, func, *args, fallback_func=None, **kwargs):
+        if self.state == BreakerState.OPEN:
+            if time.time() - self.last_failure_time > self.recovery_timeout:
+                self.state = BreakerState.HALF_OPEN
+            else:
+                if fallback_func:
+                    return await fallback_func(*args, **kwargs)
+                raise CircuitBreakerOpenError()
+
+        try:
+            result = await func(*args, **kwargs)
+            if self.state == BreakerState.HALF_OPEN:
+                self.state = BreakerState.CLOSED
+                self.failure_count = 0
+            return result
+
+        except Exception:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+            if self.failure_count >= self.failure_threshold:
+                self.state = BreakerState.OPEN
+            if fallback_func:
+                return await fallback_func(*args, **kwargs)
+            raise
+```
+
+Trace (gpt-4.1-mini API failures):
+```
+Calls 1–4: gpt-4.1-mini → 429 errors → failure count 4/4 → breaker OPEN
+Call 5+:   breaker OPEN → fallback: gpt-4.1 → SUCCESS (transparent to Supervisor)
+After 60s: probe gpt-4.1-mini → SUCCESS → breaker CLOSED (back to normal)
+```

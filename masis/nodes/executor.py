@@ -1,21 +1,21 @@
 """
 masis.nodes.executor
 ====================
-Executor node  --  dispatches individual or parallel agent tasks (ENG-05, MF-EXE-01 to MF-EXE-10).
+The Executor sits between the Supervisor and the agents. It reads the task list
+from the Supervisor and runs them — one at a time or in parallel.
 
-The Executor sits between the Supervisor and the agents.  It:
-    - Reads ``state["next_tasks"]`` from the Supervisor.
-    - Single task   ->  calls dispatch_with_safety() directly (MF-EXE-01).
-    - Multiple tasks  ->  returns a list of Send() objects for LangGraph parallel
-      fan-out (MF-EXE-02).
-    - Routes task.type to the correct Python agent function (MF-EXE-03).
-    - Guards against unknown types with a structured error response (MF-EXE-04).
-    - Wraps every call in an asyncio timeout (MF-EXE-05).
-    - Normalises every result into AgentOutput (MF-EXE-06).
-    - Provides each agent a filtered state view (MF-EXE-07).
-    - Writes agent evidence to the evidence_board via the reducer (MF-EXE-08).
-    - Updates BudgetTracker after each call (MF-EXE-09).
-    - Enforces per-agent rate limits before dispatching (MF-EXE-10).
+What it does:
+    - Reads state["next_tasks"] from the Supervisor
+    - Single task   ->  runs dispatch_with_safety() directly
+    - Multiple tasks  ->  returns Send() objects so LangGraph runs them in parallel
+    - Routes task.type to the right agent function (researcher, skeptic, synthesizer, web_search)
+    - Returns a structured error if task type is unknown
+    - Wraps every call in an asyncio timeout so nothing hangs
+    - Normalizes every result into AgentOutput for consistent handling
+    - Gives each agent only the state fields it needs (filtered view)
+    - Writes agent evidence to the shared evidence_board via the dedup reducer
+    - Updates BudgetTracker after each call
+    - Checks per-agent rate limits before dispatching
 
 Public API
 ----------

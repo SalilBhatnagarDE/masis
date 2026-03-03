@@ -1,18 +1,19 @@
 """
 masis.agents.researcher
 =======================
-Researcher agent  --  the primary RAG pipeline (ENG-07, MF-RES-01 through MF-RES-10).
+The Researcher finds relevant evidence from the knowledge base and returns
+a grounded answer with citations.
 
 Pipeline stages
 ---------------
-1. HyDE rewrite          --  generate a hypothetical passage to improve embedding similarity (MF-RES-01)
-2. Metadata extraction   --  parse year/quarter/department for ChromaDB filter (MF-RES-02)
-3. Hybrid retrieval      --  vector top-10 + BM25 top-10, fused via RRF (MF-RES-03)
-4. Cross-encoder rerank  --  ms-marco-MiniLM-L-6-v2 keeps top-5 (MF-RES-04)
-5. Parent expansion      --  child (500 chars)  ->  parent (2000 chars) (MF-RES-07)
-6. CRAG grading          --  grade relevance, rewrite + retry up to 3× (MF-RES-05)
-7. Self-RAG check        --  verify answer is grounded, regenerate if not (MF-RES-06)
-8. Structured output     --  ResearcherOutput with all criteria fields (MF-RES-08/09/10)
+1. HyDE rewrite          --  writes a hypothetical answer to improve embedding similarity
+2. Metadata extraction   --  extracts year/quarter/department to filter ChromaDB results
+3. Hybrid retrieval      --  vector top-10 + BM25 top-10, merged via RRF
+4. Cross-encoder rerank  --  ms-marco-MiniLM-L-6-v2 picks top-5 chunks
+5. Parent expansion      --  expands small chunks (500 chars) to parent context (2000 chars)
+6. CRAG grading          --  grades each chunk for relevance, rewrites query and retries if too few pass
+7. Self-RAG check        --  verifies the generated answer is grounded, regenerates if not
+8. Structured output     --  returns ResearcherOutput with pass/fail criteria for the Supervisor
 
 Public API
 ----------

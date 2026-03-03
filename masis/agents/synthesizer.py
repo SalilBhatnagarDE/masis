@@ -1,18 +1,20 @@
 """
 masis.agents.synthesizer
 ========================
-Synthesizer agent — produces the final cited answer (ENG-09, MF-SYN-01 through MF-SYN-08).
+The Synthesizer takes all the verified evidence and the Skeptic's notes and writes
+the final cited answer. Every claim must point to a specific document chunk.
 
 Pipeline
 --------
-1. U-shape context ordering  — best evidence at start and end, weakest in middle (MF-SYN-01)
-2. Critique integration      — embed Skeptic's flags in the prompt (MF-SYN-02)
-3. Citation-enforced generation — gpt-4.1 with SynthesizerOutput (min_length=1 on citations) (MF-SYN-03/04)
-4. Post-hoc NLI verification — fill entailment_score on each Citation (MF-SYN-05)
+1. U-shape context ordering  — puts best evidence at the start and end of the prompt
+                               so the LLM pays attention to the strongest chunks
+2. Critique integration      — embeds the Skeptic's flags so weak evidence is handled carefully
+3. Citation-enforced output  — gpt-4.1 with SynthesizerOutput (citations list requires min 1 entry)
+4. Post-hoc NLI verification — fills entailment_score on each citation after generation
 5. Edge cases:
-     partial mode    — force_synthesize adds disclaimer about missing dimensions (MF-SYN-06)
-     no evidence     — honest "no evidence found" response (MF-SYN-07)
-     both sides      — when Skeptic reconciled contradictions, present both perspectives (MF-SYN-08)
+     partial mode    — when force_synthesize is set, adds a disclaimer about missing dimensions
+     no evidence     — returns an honest "no evidence found" answer instead of making things up
+     both sides      — when Skeptic reconciled contradictions, presents both perspectives
 
 Public API
 ----------

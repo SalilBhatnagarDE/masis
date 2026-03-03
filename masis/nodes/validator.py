@@ -1,20 +1,21 @@
 """
 masis.nodes.validator
 =====================
-Validator node — final quality gate before the answer is returned (ENG-06, MF-VAL-01 to MF-VAL-07).
+The Validator is the final quality gate. It scores the answer on four metrics and
+only lets it through if all thresholds pass.
 
-Quality checks run after the Synthesizer completes:
-    MF-VAL-01  faithfulness       — NLI entailment of each synthesis sentence vs source chunks
-    MF-VAL-02  citation accuracy  — each Citation.chunk_id exists in evidence_board; NLI ≥ 0.80
-    MF-VAL-03  answer relevancy   — cosine similarity between answer and original_query
-    MF-VAL-04  DAG completeness   — fraction of research tasks addressed in the answer
-    MF-VAL-05  threshold gates    — all four scores must meet or exceed the VALIDATOR_THRESHOLDS
-    MF-VAL-06  quality_scores     — written to state for Supervisor to read on revise loop
-    MF-VAL-07  max rounds         — cap validator→supervisor loops at MAX_VALIDATION_ROUNDS=2
+Scores computed after Synthesizer completes:
+    faithfulness       — checks each sentence in the answer is supported by evidence (NLI)
+    citation accuracy  — checks each citation chunk_id exists in the evidence board; NLI >= 0.80
+    answer relevancy   — cosine similarity between the answer and the original query
+    DAG completeness   — fraction of planned research tasks covered by the answer
+
+All four scores must meet VALIDATOR_THRESHOLDS. If any fail, routes back to Supervisor.
+After MAX_VALIDATION_ROUNDS=2 failed rounds, forces a pass with whatever answer exists.
 
 Routing:
-    pass   → END   (all thresholds met, or MAX_VALIDATION_ROUNDS reached)
-    revise → supervisor (at least one threshold missed)
+    pass   → END        (all thresholds met, or max rounds reached)
+    revise → supervisor  (at least one threshold missed)
 
 Public API
 ----------
