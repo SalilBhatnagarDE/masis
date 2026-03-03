@@ -33,6 +33,10 @@ Validator scores it → PASS → answer returned
 
 ---
 
+## Previous Repo
+
+https://github.com/SalilBhatnagarDE/AI-Leadership-Insights-Agent-Flow-Research
+
 ## Architecture
 
 ```
