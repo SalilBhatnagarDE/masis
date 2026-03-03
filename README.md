@@ -33,7 +33,7 @@ Validator scores it → PASS → answer returned
 
 ---
 
-## Previous Repo
+## Previous Repo (single agent flow)
 
 https://github.com/SalilBhatnagarDE/AI-Leadership-Insights-Agent-Flow-Research
 
@@ -82,20 +82,6 @@ Takes the verified evidence plus the Skeptic's critique notes and writes the fin
 
 ### Validator
 Final quality gate. Scores the answer on four metrics: faithfulness, citation accuracy, answer relevancy, DAG completeness. If anything falls below threshold, routes back to the Supervisor. Capped at 2 rounds to avoid infinite loops.
-
----
-
-## Detailed Documentation
-
-For deeper technical detail, each area has its own doc:
-
-| Doc | What's in it |
-|---|---|
-| [High-Level Design](docs_md/01_HLD.md) | 3-node graph architecture, Supervisor modes (Fast/Slow Path), dynamic task DAG, why 3 nodes instead of N |
-| [Low-Level Design](docs_md/02_LLD.md) | `MASISState` schema, evidence reducer, per-agent filtered state views, Pydantic class hierarchy, routing logic |
-| [Research & Tech Choices](docs_md/03_Research_Justification.md) | Why LangGraph, model selection reasoning with benchmarks, HyDE/CRAG/Self-RAG explained, circuit breaker, cost savings |
-| [Evaluation Strategy](docs_md/04_Evaluation_Strategy.md) | Validator quality gates, HITL interrupt points, budget enforcement, loop prevention, golden dataset |
-| [Demo & Architecture Reference](docs_md/05_Demo_and_Architecture.md) | Step-by-step Q1 demo run with actual JSON artifacts, all 4 agent flow diagrams, API endpoints, cost breakdown |
 
 ---
 
@@ -158,7 +144,7 @@ Each agent sees only what it needs. The Supervisor never sees full evidence chun
 
 | Agent | Sees | Does NOT See |
 |---|---|---|
-| **Supervisor** | `original_query`, `task_dag` (statuses), `last_task_result.summary` (500 chars max), `token_budget`, `iteration_count` | Full `evidence_board`, `critique_notes`, `synthesis_output` |
+| **Supervisor** | `original_query`, `task_dag` (statuses), `last_task_result.summary`, `token_budget`, `iteration_count` | Full `evidence_board`, `critique_notes`, `synthesis_output` |
 | **Researcher** | `task.query` (its own sub-question only) | Other researchers' evidence, `task_dag`, budget |
 | **Skeptic** | All `evidence_board` chunks (needs cross-doc analysis), `task_dag` | Budget, `iteration_count`, other agent summaries |
 | **Synthesizer** | `evidence_board` (U-shape ordered), `critique_notes`, `task_dag` | Budget, raw retrieval scores |
@@ -168,21 +154,43 @@ The Supervisor makes routing decisions from summaries, not 100,000 chars of raw 
 
 ---
 
-## Why These Models
+## Detailed Documentation
 
-Picking models for a multi-agent system isn't just about "best model = use everywhere". Each agent has a different job, so different tradeoffs apply.
+For deeper technical detail, each area has its own doc:
+
+| Doc | What's in it |
+|---|---|
+| [High-Level Design](docs_md/01_HLD.md) | 3-node graph architecture, Supervisor modes (Fast/Slow Path), dynamic task DAG, why 3 nodes instead of N |
+| [Low-Level Design](docs_md/02_LLD.md) | `MASISState` schema, evidence reducer, per-agent filtered state views, Pydantic class hierarchy, routing logic |
+| [Research & Tech Choices](docs_md/03_Research_Justification.md) | Why LangGraph, model selection reasoning with benchmarks, HyDE/CRAG/Self-RAG explained, circuit breaker, cost savings |
+| [Evaluation Strategy](docs_md/04_Evaluation_Strategy.md) | Validator quality gates, HITL interrupt points, budget enforcement, loop prevention, golden dataset |
+| [Demo & Architecture Reference](docs_md/05_Demo_and_Architecture.md) | Step-by-step Q1 demo run with actual JSON artifacts, all 4 agent flow diagrams, API endpoints, cost breakdown |
+
+---
+
+## Why Specific Models
+
+Each agent has a different job, so different tradeoffs apply.
 
 **gpt-4.1 — Supervisor and Synthesizer**
 
-The Supervisor needs to turn a vague question like *"how is Infosys doing?"* into a structured JSON task plan with the right dependencies and acceptance criteria. This requires solid instruction-following and structured output reliability. gpt-4.1 scores near the top on instruction-following benchmarks — 90.7% on IFEval vs 83.6% for gpt-4o — and is significantly more reliable at producing valid Pydantic-constrained JSON than older models. I also use it for the Synthesizer because writing a coherent, well-cited 500-word answer from 15 evidence chunks requires strong long-context reasoning. Using a cheaper model here tends to produce messy citations and dropped claims.
+The Supervisor needs to turn a vague question like *"how is Infosys doing?"* into a structured JSON task plan with the right dependencies and acceptance criteria. This requires solid instruction-following and structured output reliability. gpt-4.1 scores near the top on instruction-following benchmarks — 90.7% on IFEval vs 83.6% for gpt-4o — and is significantly more reliable at producing valid Pydantic-constrained JSON than older models. 
+
+I also use it for the Synthesizer because writing a coherent, well-cited answer from 15 evidence chunks requires strong long-context reasoning. 
+
+Using a cheaper model here tends to produce messy citations and dropped claims.
 
 **gpt-4.1-mini — Researcher**
 
-The Researcher runs in a tight loop — it grades chunks, checks relevance, rewrites queries. This happens multiple times per query and the tasks are classification-level work, not complex reasoning. gpt-4.1-mini is 60x cheaper than gpt-4.1 and handles these grading tasks well. On MMLU it scores 71.1%, which is more than enough for "is this chunk relevant to this query?" type decisions. Using a heavy model here would triple the cost with no meaningful quality improvement.
+The Researcher runs in a tight loop — it grades chunks, checks relevance, rewrites queries. This happens multiple times per query and the tasks are classification-level work, not complex reasoning. gpt-4.1-mini is 60x cheaper than gpt-4.1 and handles these grading tasks well. On MMLU it scores 71.1%, which is more than enough for "is this chunk relevant to this query?" type decisions. 
+
+Using a heavy model here would triple the cost with no meaningful quality improvement.
 
 **o3-mini — Skeptic**
 
-The Skeptic's job is adversarial reasoning — it needs to find the holes in an argument, not just summarize it. o3-mini is specifically a reasoning model trained on chains of thought. It scores significantly higher than gpt-4.1 on reasoning-heavy benchmarks like AIME 2024 (63% vs 26%) and GPQA Diamond (79% vs 66%). In practice, I found o3-mini is much better at flagging subtle logical gaps and forward-looking claims that aren't actually supported by evidence. For a critic role, reasoning > fluency.
+The Skeptic's job is adversarial reasoning — it needs to find the holes in an argument, not just summarize it. o3-mini is specifically a reasoning model trained on chains of thought. 
+
+It scores significantly higher than gpt-4.1 on reasoning-heavy benchmarks like AIME 2024 (63% vs 26%) and GPQA Diamond (79% vs 66%). In practice, I found o3-mini is much better at flagging subtle logical gaps and forward-looking claims that aren't actually supported by evidence. For a critic role, reasoning > fluency.
 
 **text-embedding-3-small — Vector Index**
 
@@ -194,7 +202,7 @@ Before spending money on the o3-mini LLM judge, I run each claim through faceboo
 
 ---
 
-## Knowledge Base
+## Example Knowledge Base
 
 The system has Infosys documents from Q1 FY24 to Q3 FY25 ingested:
 
@@ -250,7 +258,7 @@ Results are saved to `masis/eval/results/` as JSON + log files per query.
 
 ---
 
-## Query Presets
+## Query Presets (Examples)
 
 | ID | Query | Notes |
 |----|-------|-------|
