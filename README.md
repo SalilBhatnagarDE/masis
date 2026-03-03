@@ -69,23 +69,6 @@ The Supervisor keeps a **decision log** of every routing action — what it deci
 
 ---
 
-## Agents
-
-### Researcher
-Searches the knowledge base using both vector search (ChromaDB) and keyword search (BM25), then reranks results. If it finds too few relevant chunks, it rewrites its own query and tries again (CRAG loop). Self-RAG checks that the answer it generates is actually grounded in what it found.
-
-### Skeptic
-This is the key differentiator. The Skeptic reads all the evidence collected so far, extracts factual claims, and checks each one against its source using an NLI model (BART-MNLI). Then it runs an adversarial LLM judge (o3-mini) to find logical gaps and reconcile any conflicts. It outputs a confidence score — if that score is below 0.65, the Supervisor retries.
-
-### Synthesizer
-Takes the verified evidence plus the Skeptic's critique notes and writes the final answer. Every claim must have a citation pointing to a specific document chunk. If some parts of the question couldn't be answered, it says so rather than making something up.
-
-### Validator
-Final quality gate. Scores the answer on four metrics: faithfulness, citation accuracy, answer relevancy, DAG completeness. If anything falls below threshold, routes back to the Supervisor. Capped at 2 rounds to avoid infinite loops.
-
----
-
-
 ## Execution Flow (Sequence Diagram)
 
 ```mermaid
@@ -135,6 +118,22 @@ sequenceDiagram
         SUP->>EXE: Retry failed dimension
     end
 ```
+
+---
+
+## Agents
+
+### Researcher
+Searches the knowledge base using both vector search (ChromaDB) and keyword search (BM25), then reranks results. If it finds too few relevant chunks, it rewrites its own query and tries again (CRAG loop). Self-RAG checks that the answer it generates is actually grounded in what it found.
+
+### Skeptic
+This is the key differentiator. The Skeptic reads all the evidence collected so far, extracts factual claims, and checks each one against its source using an NLI model (BART-MNLI). Then it runs an adversarial LLM judge (o3-mini) to find logical gaps and reconcile any conflicts. It outputs a confidence score — if that score is below 0.65, the Supervisor retries.
+
+### Synthesizer
+Takes the verified evidence plus the Skeptic's critique notes and writes the final answer. Every claim must have a citation pointing to a specific document chunk. If some parts of the question couldn't be answered, it says so rather than making something up.
+
+### Validator
+Final quality gate. Scores the answer on four metrics: faithfulness, citation accuracy, answer relevancy, DAG completeness. If anything falls below threshold, routes back to the Supervisor. Capped at 2 rounds to avoid infinite loops.
 
 ---
 
@@ -228,8 +227,10 @@ pip install -r requirements.txt
 
 **Environment variables:**
 ```bash
-export OPENAI_API_KEY=sk-...         # required
-export TAVILY_API_KEY=tvly-...       # optional, enables web search tasks
+cp .env.example .env
+# then edit .env:
+#   OPENAI_API_KEY is required
+#   TAVILY_API_KEY is optional (enables web search tasks)
 ```
 
 **Build the index (once):**

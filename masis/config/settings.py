@@ -54,8 +54,7 @@ def _load_dotenv() -> bool:
 
     Searches for .env in the following order:
     1. Current working directory
-    2. Parent directory of this file (masis/)
-    3. Two parents up (project root, where .env.example lives)
+    2. Project root (repository root, where .env.example lives)
 
     Returns:
         True if a .env file was found and loaded, False otherwise.
@@ -70,8 +69,6 @@ def _load_dotenv() -> bool:
 
     candidates = [
         Path.cwd() / ".env",
-        Path(__file__).parent / ".env",      # masis/config/.env (uncommon)
-        Path(__file__).parent.parent / ".env",  # masis/.env
         Path(__file__).parent.parent.parent / ".env",  # project root .env
     ]
 
@@ -254,7 +251,7 @@ class Settings:
             raise EnvironmentError(
                 f"Missing required environment variables:\n  - {lines}\n"
                 "Set these variables in your .env file or shell environment.\n"
-                f"See masis/.env.example for the full list of supported variables."
+                "See .env.example for the full list of supported variables."
             )
 
     def summary(self) -> str:

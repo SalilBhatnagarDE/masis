@@ -491,9 +491,11 @@ Additional:
 # Install
 pip install -r requirements.txt
 
-# Set environment variables
-export OPENAI_API_KEY=sk-...
-export TAVILY_API_KEY=tvly-...   # optional
+# Configure environment variables from the shared template
+cp .env.example .env
+# then edit .env:
+#   OPENAI_API_KEY is required
+#   TAVILY_API_KEY is optional
 
 # Build the index (once)
 python -m masis.eval.ingest_docs
